@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Logger</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e10; --surface: #18181c; --surface2: #222228;
+    --border: #2e2e38; --text: #e8e8f0; --muted: #7a7a90;
+    --accent: #c8f060; --accent2: #60c8f0; --accent3: #f060a8; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 13px 22px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  header h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--accent); }
+  .tabs { display: flex; gap: 2px; margin-left: auto; }
+  .tab { padding: 6px 15px; border-radius: 6px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.77rem; font-weight: 500; color: var(--muted); border: none; background: transparent; transition: all 0.15s; }
+  .tab:hover { color: var(--text); background: var(--surface2); }
+  .tab.active { color: var(--bg); background: var(--accent); }
+  .page { display: none; flex: 1; padding: 22px; overflow-y: auto; }
+  .page.active { display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 17px 19px; }
+  .card h2 { font-family: 'Syne', sans-serif; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 13px; }
+  .section-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; }
+
+  /* ACTIVITIES */
+  .activity-item { display: flex; align-items: center; gap: 10px; padding: 8px 11px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 5px; }
+  .color-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; cursor: pointer; transition: transform 0.15s; }
+  .color-dot:hover { transform: scale(1.25); }
+  .activity-name { flex: 1; background: transparent; border: none; color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.83rem; outline: none; }
+  .activity-name:focus { color: var(--accent); }
+  .delete-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; padding: 2px 5px; border-radius: 4px; transition: all 0.15s; line-height: 1; }
+  .delete-btn:hover { color: var(--accent3); background: rgba(240,96,168,0.1); }
+  .add-btn { display: flex; align-items: center; gap: 8px; padding: 8px 11px; background: transparent; border: 1px dashed var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.79rem; transition: all 0.15s; width: 100%; margin-top: 7px; }
+  .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .color-picker-popup { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px; display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; z-index: 200; box-shadow: 0 8px 28px rgba(0,0,0,0.65); }
+  .color-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.12s; }
+  .color-swatch:hover { transform: scale(1.2); border-color: white; }
+
+  /* LOG */
+  .log-controls { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .view-toggle, .period-toggle, .chart-toggle { display: flex; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); overflow: hidden; }
+  .view-btn, .period-btn, .chart-btn { padding: 6px 13px; border: none; background: transparent; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
+  .view-btn.active { background: var(--accent); color: var(--bg); }
+  .period-btn.active { background: var(--accent); color: var(--bg); }
+  .chart-btn.active { background: var(--accent2); color: var(--bg); }
+  .nav-group { display: flex; align-items: center; gap: 7px; }
+  .nav-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 11px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.83rem; transition: all 0.15s; }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; min-width: 175px; text-align: center; }
+  .now-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 11px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.74rem; transition: all 0.15s; }
+  .now-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Entries */
+  .entry-row { display: flex; align-items: center; gap: 7px; padding: 7px 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 4px; animation: fs 0.18s ease; }
+  @keyframes fs { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
+  .entry-color-bar { width: 3px; height: 24px; border-radius: 2px; flex-shrink: 0; }
+  .entry-start { font-size: 0.74rem; color: var(--muted); min-width: 46px; }
+  .entry-arrow { color: var(--border); font-size: 0.76rem; }
+  .time-input { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.79rem; padding: 3px 6px; width: 76px; outline: none; transition: border-color 0.15s; }
+  .time-input:focus { border-color: var(--accent); }
+  .activity-select { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.79rem; padding: 3px 6px; outline: none; transition: border-color 0.15s; cursor: pointer; }
+  .activity-select:focus { border-color: var(--accent); }
+  .entry-duration { font-size: 0.7rem; color: var(--muted); min-width: 46px; text-align: right; }
+  .badge { font-size: 0.62rem; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+  .badge-roll { color: var(--accent2); background: rgba(96,200,240,0.12); }
+  .badge-from { color: var(--accent3); background: rgba(240,96,168,0.1); }
+  .add-entry-btn { display: flex; align-items: center; gap: 7px; padding: 7px 11px; background: transparent; border: 1px dashed var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.78rem; transition: all 0.15s; width: 100%; margin-top: 5px; }
+  .add-entry-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .rollover-notice { font-size: 0.7rem; color: var(--accent2); background: rgba(96,200,240,0.08); border: 1px solid rgba(96,200,240,0.2); border-radius: 5px; padding: 6px 10px; margin-top: 8px; animation: fs 0.2s ease; }
+
+  /* Week grid */
+  .week-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 7px; }
+  .week-col { display: flex; flex-direction: column; }
+  .week-col-hdr { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.73rem; color: var(--muted); text-align: center; padding: 5px 3px; border-bottom: 1px solid var(--border); margin-bottom: 5px; }
+  .week-col-hdr.today-col { color: var(--accent); }
+  .week-entry { padding: 5px 6px; background: var(--surface2); border-radius: 4px; border-left: 3px solid var(--border); margin-bottom: 3px; cursor: pointer; transition: border-left-color 0.12s; }
+  .week-entry:hover { border-left-color: var(--accent); }
+  .we-name { font-size: 0.69rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .we-time { font-size: 0.63rem; color: var(--muted); }
+  .week-add { text-align: center; padding: 4px; border: 1px dashed var(--border); border-radius: 4px; color: var(--muted); cursor: pointer; font-size: 0.68rem; transition: all 0.12s; margin-top: 2px; }
+  .week-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Timeline bars */
+  .tl-row { display: flex; align-items: center; gap: 9px; margin-bottom: 5px; }
+  .tl-lbl { font-size: 0.7rem; color: var(--muted); width: 26px; text-align: right; flex-shrink: 0; font-family: 'Syne', sans-serif; }
+  .tl-bar { flex: 1; height: 28px; background: var(--surface2); border-radius: 5px; overflow: hidden; display: flex; border: 1px solid var(--border); position: relative; }
+  .tl-total { font-size: 0.68rem; color: var(--muted); width: 68px; text-align: right; flex-shrink: 0; }
+  .bar-seg { height: 100%; position: relative; cursor: default; transition: opacity 0.12s; }
+  .bar-seg:hover { opacity: 0.75; }
+  .seg-tip { position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; font-size: 0.67rem; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 10; color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .bar-seg:hover .seg-tip { opacity: 1; }
+  .time-axis { display: flex; margin-left: 35px; margin-bottom: 2px; }
+  .time-tick { font-size: 0.59rem; color: var(--muted); flex: 1; }
+
+  /* Pie */
+  .pie-wrap { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+  .pie-legend { display: flex; flex-direction: column; gap: 7px; }
+  .pie-legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.76rem; }
+  .pie-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .pie-legend-val { color: var(--muted); margin-left: auto; padding-left: 14px; }
+
+  /* Bar chart */
+  .bar-chart { display: flex; flex-direction: column; gap: 7px; }
+  .bc-row { display: flex; align-items: center; gap: 9px; }
+  .bc-lbl { font-size: 0.74rem; color: var(--muted); width: 96px; text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bc-bar { flex: 1; height: 20px; background: var(--surface2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+  .bc-fill { height: 100%; border-radius: 4px; transition: width 0.5s cubic-bezier(.4,0,.2,1); }
+  .bc-val { font-size: 0.7rem; color: var(--muted); width: 46px; }
+
+  .legend-strip { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 11px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.71rem; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(125px,1fr)); gap: 7px; }
+  .summary-item { background: var(--surface2); border-radius: 7px; padding: 10px 11px; }
+  .summary-name { font-size: 0.69rem; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+  .summary-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; }
+
+  .save-indicator { font-size: 0.67rem; color: var(--accent); opacity: 0; transition: opacity 0.3s; }
+  .save-indicator.show { opacity: 1; }
+  select option { background: #18181c; }
+  .no-data { color: var(--muted); font-size: 0.8rem; padding: 10px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>◈ DAILY LOG</h1>
+  <span class="save-indicator" id="saveIndicator">● saved</span>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('activities')">Activities</button>
+    <button class="tab" onclick="switchTab('log')">Log</button>
+    <button class="tab" onclick="switchTab('totals')">Totals</button>
+  </div>
+</header>
+
+<!-- ACTIVITIES -->
+<div class="page active" id="page-activities">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <span class="section-label">Activities</span>
+    <span style="font-size:0.74rem;color:var(--muted)">Click a dot to change color</span>
+  </div>
+  <div class="card" style="max-width:490px;">
+    <h2>Your Activities</h2>
+    <div id="activityList"></div>
+    <button class="add-btn" onclick="addActivity()">+ add activity</button>
+  </div>
+  <div class="color-picker-popup" id="colorPicker" style="display:none;"></div>
+</div>
+
+<!-- LOG -->
+<div class="page" id="page-log">
+  <div class="log-controls">
+    <div class="view-toggle">
+      <button class="view-btn active" id="vbDay" onclick="setLogView('day')">Day</button>
+      <button class="view-btn" id="vbWeek" onclick="setLogView('week')">Week</button>
+    </div>
+    <div class="nav-group">
+      <button class="nav-btn" onclick="logNav(-1)">←</button>
+      <div class="nav-label" id="logNavLabel"></div>
+      <button class="nav-btn" onclick="logNav(1)">→</button>
+    </div>
+    <button class="now-btn" onclick="logGoNow()">now</button>
+  </div>
+  <div id="logContent"></div>
+</div>
+
+<!-- TOTALS -->
+<div class="page" id="page-totals">
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:9px;justify-content:space-between;">
+    <span class="section-label">Totals</span>
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+      <div class="period-toggle">
+        <button class="period-btn active" id="pb-day" onclick="setPeriod('day')">Day</button>
+        <button class="period-btn" id="pb-week" onclick="setPeriod('week')">Week</button>
+        <button class="period-btn" id="pb-year" onclick="setPeriod('year')">Year</button>
+      </div>
+      <div class="chart-toggle">
+        <button class="chart-btn active" id="cb-timeline" onclick="setChart('timeline')">Timeline</button>
+        <button class="chart-btn" id="cb-bar" onclick="setChart('bar')">Bar</button>
+        <button class="chart-btn" id="cb-pie" onclick="setChart('pie')">Pie</button>
+      </div>
+      <div class="nav-group">
+        <button class="nav-btn" onclick="totalsNav(-1)">←</button>
+        <div class="nav-label" id="totalsNavLabel" style="min-width:155px;font-size:0.88rem;"></div>
+        <button class="nav-btn" onclick="totalsNav(1)">→</button>
+      </div>
+      <button class="now-btn" onclick="totalsGoNow()">now</button>
+    </div>
+  </div>
+  <div id="totalsContent"></div>
+</div>
+
+<script>
+// ── CONSTANTS ──────────────────────────────────────────
+const COLORS=['#c8f060','#60c8f0','#f060a8','#f0a060','#a060f0','#60f0a0','#f0f060','#f06060','#60a0f0','#f0c060','#80e0c0','#e080c0','#c0e080','#80c0e0','#e0c080','#ff8c69','#69b4ff','#b469ff','#69ffb4','#ffb469','#ff6969','#69ff69','#6969ff','#ffd700','#00ced1','#ff69b4','#adff2f','#ff4500','#1e90ff','#32cd32','#ff1493','#00fa9a','#ff6347','#4169e1','#ffa07a'];
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ── STATE ──────────────────────────────────────────────
+let S = {
+  activities:[
+    {id:1,name:'Sleep',color:'#6969ff'},{id:2,name:'Essentials',color:'#60c8f0'},
+    {id:3,name:'Guitar',color:'#f0a060'},{id:4,name:'Drums',color:'#a060f0'},
+    {id:5,name:'Math',color:'#c8f060'},{id:6,name:'CP',color:'#f060a8'},
+    {id:7,name:'Game',color:'#60f0a0'},{id:8,name:'Entertainment',color:'#f0f060'},
+    {id:9,name:'Church',color:'#ff8c69'},
+  ],
+  logs:{},
+  nextId:100,
+};
+
+let logView='day', logDate=todayStr(), logWeekOff=0;
+let totalsPeriod='day', totalsChart='timeline', totalsOff=0;
+
+// ── PERSIST ────────────────────────────────────────────
+function save(){
+  try{localStorage.setItem('dlg3',JSON.stringify(S));}catch(e){}
+  const el=document.getElementById('saveIndicator');
+  el.classList.add('show'); clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('show'),1100);
+}
+function load(){try{const d=localStorage.getItem('dlg3');if(d)S=JSON.parse(d);}catch(e){}}
+
+// ── UTILS ──────────────────────────────────────────────
+function todayStr(){return new Date().toISOString().slice(0,10);}
+function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function parseTime(s){if(!s)return null;const p=s.split(':');if(p.length<2)return null;const h=+p[0],m=+p[1];if(isNaN(h)||isNaN(m))return null;return(h*60+m)/1440;}
+function decToTime(v){if(v==null)return'';v=((v%1)+1)%1;const t=Math.round(v*1440),h=Math.floor(t/60)%24,m=t%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+function fmtDur(v){if(v==null||v<0)return'';let t=v*24;if(t<0)t+=24;const h=Math.floor(t),m=Math.round((t-h)*60);if(h===0)return m+'m';if(m===0)return h+'h';return h+'h'+m+'m';}
+function fmtDate(ds){const d=new Date(ds+'T12:00:00');return DAYS[d.getDay()]+' '+MONTHS[d.getMonth()]+' '+d.getDate();}
+function weekSun(off){const t=new Date();t.setHours(12,0,0,0);t.setDate(t.getDate()-t.getDay()+off*7);return t.toISOString().slice(0,10);}
+function actById(id){return S.activities.find(a=>a.id===id);}
+function dayEntries(ds){return S.logs[ds]||[];}
+function startOf(ds,i){return i===0?0:(dayEntries(ds)[i-1]?.endTime??null);}
+function calcDur(s,e){if(s==null||e==null)return null;let d=e-s;if(d<0)d+=1;return d;}
+function actOpts(sel){return'<option value="">— pick —</option>'+S.activities.map(a=>`<option value="${a.id}"${a.id===sel?' selected':''}>${a.name}</option>`).join('');}
+
+// ── TAB ────────────────────────────────────────────────
+function switchTab(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.textContent.toLowerCase()===name));
+  if(name==='activities')renderActivities();
+  if(name==='log')renderLog();
+  if(name==='totals')renderTotals();
+}
+
+// ── ACTIVITIES ─────────────────────────────────────────
+function renderActivities(){
+  const el=document.getElementById('activityList');
+  el.innerHTML='';
+  S.activities.forEach(a=>{
+    const row=document.createElement('div');row.className='activity-item';
+    row.innerHTML=`<div class="color-dot" style="background:${a.color}" onclick="openPicker(event,${a.id})"></div>
+      <input class="activity-name" value="${a.name}" onchange="renameAct(${a.id},this.value)" onblur="renameAct(${a.id},this.value)"/>
+      <button class="delete-btn" onclick="deleteAct(${a.id})">✕</button>`;
+    el.appendChild(row);
+  });
+}
+function addActivity(){
+  const id=S.nextId++;S.activities.push({id,name:'New Activity',color:COLORS[S.activities.length%COLORS.length]});
+  save();renderActivities();
+  const ins=document.querySelectorAll('.activity-name');const last=ins[ins.length-1];if(last){last.focus();last.select();}
+}
+function renameAct(id,v){const a=S.activities.find(a=>a.id===id);if(a)a.name=v.trim()||a.name;save();}
+function deleteAct(id){S.activities=S.activities.filter(a=>a.id!==id);save();renderActivities();}
+function openPicker(e,id){
+  e.stopPropagation();
+  const p=document.getElementById('colorPicker');p.innerHTML='';
+  COLORS.forEach(c=>{const sw=document.createElement('div');sw.className='color-swatch';sw.style.background=c;
+    const a=S.activities.find(a=>a.id===id);if(a&&a.color===c)sw.style.borderColor='white';
+    sw.onclick=ev=>{ev.stopPropagation();const ax=S.activities.find(a=>a.id===id);if(ax)ax.color=c;save();renderActivities();p.style.display='none';};
+    p.appendChild(sw);});
+  p.style.display='grid';const r=e.target.getBoundingClientRect();
+  p.style.top=(r.bottom+5)+'px';p.style.left=r.left+'px';
+}
+document.addEventListener('click',()=>document.getElementById('colorPicker').style.display='none');
+
+// ── LOG ────────────────────────────────────────────────
+function setLogView(v){
+  logView=v;
+  document.getElementById('vbDay').classList.toggle('active',v==='day');
+  document.getElementById('vbWeek').classList.toggle('active',v==='week');
+  if(v==='week'){const d=new Date(logDate+'T12:00:00');const dow=d.getDay();const sun=addDays(logDate,-dow);const ts=weekSun(0);const ms=Math.round((new Date(sun)-new Date(ts))/(7*86400000));logWeekOff=ms;}
+  renderLog();
+}
+function logNav(d){if(logView==='day')logDate=addDays(logDate,d);else logWeekOff+=d;renderLog();}
+function logGoNow(){logDate=todayStr();logWeekOff=0;renderLog();}
+
+function renderLog(){
+  const todayS=todayStr();
+  if(logView==='day'){
+    document.getElementById('logNavLabel').textContent=fmtDate(logDate);
+    const c=document.getElementById('logContent');c.innerHTML='';
+    c.appendChild(buildDayCard(logDate,true));
+  } else {
+    const sun=weekSun(logWeekOff);const sat=addDays(sun,6);
+    const f=s=>{const d=new Date(s+'T12:00:00');return MONTHS[d.getMonth()]+' '+d.getDate();};
+    document.getElementById('logNavLabel').textContent=f(sun)+' – '+f(sat);
+    const c=document.getElementById('logContent');c.innerHTML='';
+    const card=document.createElement('div');card.className='card';card.innerHTML='<h2>Week Log</h2>';
+    const grid=document.createElement('div');grid.className='week-grid';
+    for(let i=0;i<7;i++){const ds=addDays(sun,i);grid.appendChild(buildWeekCol(ds,ds===todayS));}
+    card.appendChild(grid);c.appendChild(card);
+    // Auto-advance hint if past
+    if(todayS>sat){logWeekOff=0;}
+  }
+}
+
+function buildDayCard(ds,editable){
+  const card=document.createElement('div');card.className='card';card.style.maxWidth='680px';
+  card.innerHTML=`<h2>${fmtDate(ds)}</h2>`;
+  const entries=dayEntries(ds);
+  entries.forEach((entry,idx)=>{
+    const start=startOf(ds,idx);
+    const endIsMidday=entry.endTime===1.0; // rollover sentinel
+    const endDec=endIsMidday?null:entry.endTime;
+    const startStr=start!=null?(start>=1?'00:00':decToTime(start)):'—';
+    const endVal=endDec!=null?decToTime(endDec):'';
+    const dur=endIsMidday?calcDur(start,1):calcDur(start,endDec);
+    const act=actById(entry.activityId);const color=act?act.color:'#444';
+    const row=document.createElement('div');row.className='entry-row';
+    row.innerHTML=`
+      <div class="entry-color-bar" style="background:${color}"></div>
+      <div class="entry-start">${startStr}</div>
+      <div class="entry-arrow">→</div>
+      <input class="time-input" type="time" value="${endIsMidday?'00:00':endVal}"
+        data-date="${ds}" data-idx="${idx}" ${editable?'':'disabled'}
+        onchange="onTimeChange(this)"/>
+      <select class="activity-select" data-date="${ds}" data-idx="${idx}"
+        onchange="onActChange(this)" ${editable?'':'disabled'}>
+        ${actOpts(entry.activityId)}
+      </select>
+      <div class="entry-duration">${fmtDur(dur)}</div>
+      ${entry.rollover?'<span class="badge badge-roll">→midnight</span>':''}
+      ${entry.fromRollover?'<span class="badge badge-from">+1d</span>':''}
+      ${editable?`<button class="delete-btn" data-date="${ds}" data-idx="${idx}" onclick="deleteEntry(this)">✕</button>`:''}`;
+    card.appendChild(row);
+  });
+  if(editable){
+    const btn=document.createElement('button');btn.className='add-entry-btn';btn.textContent='+ add entry';
+    btn.onclick=()=>{addEntry(ds);};card.appendChild(btn);
+  }
+  return card;
+}
+
+function buildWeekCol(ds,isToday){
+  const col=document.createElement('div');col.className='week-col';
+  const d=new Date(ds+'T12:00:00');
+  const hdr=document.createElement('div');hdr.className='week-col-hdr'+(isToday?' today-col':'');
+  hdr.textContent=DAYS[d.getDay()]+' '+d.getDate();col.appendChild(hdr);
+  const entries=dayEntries(ds);
+  entries.forEach((entry,idx)=>{
+    const act=actById(entry.activityId);const color=act?act.color:'#555';
+    const start=startOf(ds,idx);const end=entry.endTime===1.0?1:entry.endTime;
+    const dur=calcDur(start,end);
+    const el=document.createElement('div');el.className='week-entry';el.style.borderLeftColor=color;
+    el.innerHTML=`<div class="we-name">${act?act.name:'—'}</div>
+      <div class="we-time">${decToTime(start>=1?0:start)}–${end!=null?decToTime(end):'?'} ${dur?'('+fmtDur(dur)+')':''}</div>`;
+    el.onclick=()=>{logDate=ds;setLogView('day');};col.appendChild(el);
+  });
+  const addBtn=document.createElement('div');addBtn.className='week-add';addBtn.textContent='+';
+  addBtn.onclick=()=>{logDate=ds;setLogView('day');addEntry(ds);};col.appendChild(addBtn);
+  return col;
+}
+
+function addEntry(ds){
+  if(!S.logs[ds])S.logs[ds]=[];
+  S.logs[ds].push({id:S.nextId++,endTime:null,activityId:null});
+  save();renderLog();
+}
+
+function onTimeChange(input){
+  const ds=input.dataset.date,idx=+input.dataset.idx;
+  const entries=dayEntries(ds);if(!entries[idx])return;
+  const newEnd=parseTime(input.value);
+  const start=startOf(ds,idx);
+
+  // Midnight rollover: newEnd < start means crossed midnight
+  if(newEnd!==null&&start!==null&&newEnd<start){
+    // Mark current entry as rolling over at midnight
+    entries[idx].endTime=1.0;entries[idx].rollover=true;
+    // Carry rest to next day
+    const nextDs=addDays(ds,1);
+    if(!S.logs[nextDs])S.logs[nextDs]=[];
+    const nextE=S.logs[nextDs];
+    // Replace or insert rollover entry at front
+    if(nextE.length>0&&nextE[0].fromRollover){
+      nextE[0].endTime=newEnd;nextE[0].activityId=entries[idx].activityId;
+    } else {
+      nextE.unshift({id:S.nextId++,endTime:newEnd,activityId:entries[idx].activityId,fromRollover:true});
+    }
+    // Show notice
+    const notice=document.createElement('div');notice.className='rollover-notice';
+    notice.textContent=`↪ Rolled over midnight → continues on ${fmtDate(nextDs)} until ${decToTime(newEnd)}`;
+    const existingCard=input.closest('.card');
+    existingCard.querySelectorAll('.rollover-notice').forEach(n=>n.remove());
+    existingCard.appendChild(notice);setTimeout(()=>notice.remove(),4500);
+  } else {
+    entries[idx].endTime=newEnd;
+    if(entries[idx].rollover){
+      entries[idx].rollover=false;
+      // Remove rollover from next day if existed
+      const nextDs=addDays(ds,1);const ne=S.logs[nextDs];
+      if(ne&&ne[0]&&ne[0].fromRollover){ne.splice(0,1);if(!ne.length)delete S.logs[nextDs];}
+    }
+  }
+  save();renderLog();
+}
+
+function onActChange(sel){
+  const ds=sel.dataset.date,idx=+sel.dataset.idx;
+  const entries=dayEntries(ds);if(!entries[idx])return;
+  const actId=+sel.value||null;entries[idx].activityId=actId;
+  // propagate to rollover continuation
+  if(entries[idx].rollover){const nd=addDays(ds,1);const ne=S.logs[nd];if(ne&&ne[0]&&ne[0].fromRollover)ne[0].activityId=actId;}
+  save();renderLog();
+}
+
+function deleteEntry(btn){
+  const ds=btn.dataset.date,idx=+btn.dataset.idx;
+  const entries=dayEntries(ds);
+  if(entries[idx]?.rollover){
+    const nd=addDays(ds,1);const ne=S.logs[nd];
+    if(ne&&ne[0]&&ne[0].fromRollover){ne.splice(0,1);if(!ne.length)delete S.logs[nd];}
+  }
+  entries.splice(idx,1);
+  if(!entries.length)delete S.logs[ds];else S.logs[ds]=entries;
+  save();renderLog();
+}
+
+// ── TOTALS ─────────────────────────────────────────────
+function setPeriod(p){
+  totalsPeriod=p;totalsOff=0;
+  ['day','week','year'].forEach(x=>document.getElementById('pb-'+x).classList.toggle('active',x===p));
+  renderTotals();
+}
+function setChart(c){
+  totalsChart=c;
+  ['timeline','bar','pie'].forEach(x=>document.getElementById('cb-'+x).classList.toggle('active',x===c));
+  renderTotals();
+}
+function totalsNav(d){totalsOff+=d;renderTotals();}
+function totalsGoNow(){totalsOff=0;renderTotals();}
+
+function getTotalsInfo(){
+  if(totalsPeriod==='day'){
+    const b=new Date();b.setHours(12,0,0,0);b.setDate(b.getDate()+totalsOff);
+    const ds=b.toISOString().slice(0,10);
+    return{label:fmtDate(ds),dates:[ds],subs:[DAYS[b.getDay()]],isYear:false};
+  }
+  if(totalsPeriod==='week'){
+    const sun=weekSun(totalsOff),sat=addDays(sun,6);
+    const f=s=>{const d=new Date(s+'T12:00:00');return MONTHS[d.getMonth()]+' '+d.getDate();};
+    const dates=Array.from({length:7},(_,i)=>addDays(sun,i));
+    return{label:f(sun)+' – '+f(sat),dates,subs:dates.map(d=>{const dd=new Date(d+'T12:00:00');return DAYS[dd.getDay()];}),isYear:false};
+  }
+  const year=new Date().getFullYear()+totalsOff;
+  const dates=Array.from({length:12},(_,m)=>`${year}-${String(m+1).padStart(2,'0')}`);
+  return{label:String(year),dates,subs:MONTHS,isYear:true,year};
+}
+
+function sumDay(ds){
+  const t={};S.activities.forEach(a=>t[a.id]=0);
+  dayEntries(ds).forEach((e,i)=>{
+    const s=startOf(ds,i),en=e.endTime===1.0?1:e.endTime;
+    if(s==null||en==null||!e.activityId)return;
+    let d=en-s;if(d<0)d+=1;if(t[e.activityId]!=null)t[e.activityId]+=d;
+  });
+  return t;
+}
+function sumMonth(ym){
+  const t={};S.activities.forEach(a=>t[a.id]=0);
+  Object.keys(S.logs).filter(ds=>ds.startsWith(ym)).forEach(ds=>{
+    const dt=sumDay(ds);S.activities.forEach(a=>t[a.id]+=(dt[a.id]||0));
+  });
+  return t;
+}
+
+function renderTotals(){
+  const info=getTotalsInfo();
+  document.getElementById('totalsNavLabel').textContent=info.label;
+  const subData=info.dates.map((d,i)=>({label:info.subs[i],totals:info.isYear?sumMonth(d):sumDay(d)}));
+  const agg={};S.activities.forEach(a=>agg[a.id]=0);
+  subData.forEach(sd=>S.activities.forEach(a=>agg[a.id]+=(sd.totals[a.id]||0)));
+  const maxAgg=Math.max(...Object.values(agg),0.001);
+  const content=document.getElementById('totalsContent');content.innerHTML='';
+
+  if(totalsChart==='pie')renderPie(content,agg,info.label);
+  else if(totalsChart==='bar')renderBar(content,agg,maxAgg);
+  else renderTimeline(content,subData,info);
+
+  // Summary card
+  const sc=document.createElement('div');sc.className='card';sc.innerHTML='<h2>Breakdown</h2>';
+  const sg=document.createElement('div');sg.className='summary-grid';
+  S.activities.filter(a=>agg[a.id]>0).forEach(a=>{
+    const h=(agg[a.id]*24).toFixed(1);
+    const si=document.createElement('div');si.className='summary-item';
+    si.style.borderLeft=`3px solid ${a.color}`;
+    si.innerHTML=`<div class="summary-name"><div style="width:8px;height:8px;border-radius:50%;background:${a.color};"></div>${a.name}</div>
+      <div class="summary-val" style="color:${a.color}">${h}h</div>`;
+    sg.appendChild(si);
+  });
+  if(!S.activities.some(a=>agg[a.id]>0))sg.innerHTML='<div class="no-data">No data for this period.</div>';
+  sc.appendChild(sg);content.appendChild(sc);
+}
+
+function renderTimeline(content,subData,info){
+  const card=document.createElement('div');card.className='card';
+  card.innerHTML=`<h2>${info.isYear?'Monthly':info.dates.length===1?'Day':'Daily'} Timeline</h2>`;
+  if(!info.isYear){
+    const ax=document.createElement('div');ax.className='time-axis';
+    for(let h=0;h<=24;h+=4){const t=document.createElement('div');t.className='time-tick';
+      t.textContent=h===0?'12a':h<12?h+'a':h===12?'12p':(h-12)+'p';ax.appendChild(t);}
+    card.appendChild(ax);
+  }
+  let anyData=false;
+  subData.forEach((sd,i)=>{
+    const ds=info.dates[i];
+    const row=document.createElement('div');row.className='tl-row';
+    const lbl=document.createElement('div');lbl.className='tl-lbl';lbl.textContent=sd.label;row.appendChild(lbl);
+    const bar=document.createElement('div');bar.className='tl-bar';
+    let logged=0;
+    if(info.isYear){
+      const total=Object.values(sd.totals).reduce((a,b)=>a+b,0);
+      if(total>0){anyData=true;
+        S.activities.filter(a=>sd.totals[a.id]>0).forEach(a=>{
+          const frac=sd.totals[a.id]/Math.max(total,0.0001);
+          const seg=document.createElement('div');seg.className='bar-seg';
+          seg.style.cssText=`width:${frac*100}%;background:${a.color};`;
+          seg.innerHTML=`<div class="seg-tip">${a.name}: ${(sd.totals[a.id]*24).toFixed(1)}h</div>`;
+          bar.appendChild(seg);});logged=total;}
+    } else {
+      dayEntries(ds).forEach((e,idx)=>{
+        const s=startOf(ds,idx),en=e.endTime===1.0?1:e.endTime;
+        if(s==null||en==null)return;let d=en-s;if(d<0)d+=1;if(d<=0)return;
+        logged+=d;anyData=true;const a=actById(e.activityId);
+        const seg=document.createElement('div');seg.className='bar-seg';
+        seg.style.cssText=`width:${d*100}%;background:${a?a.color:'#444'};`;
+        seg.innerHTML=`<div class="seg-tip">${a?a.name:'?'}: ${fmtDur(d)} (${decToTime(s>=1?0:s)}–${decToTime(en)})</div>`;
+        bar.appendChild(seg);});
+    }
+    row.appendChild(bar);
+    const tot=document.createElement('div');tot.className='tl-total';
+    tot.textContent=logged>0?(info.isYear?(logged*24).toFixed(1)+'h':fmtDur(logged)+' logged'):'';
+    row.appendChild(tot);card.appendChild(row);
+  });
+  if(!anyData)card.innerHTML+='<div class="no-data" style="margin-top:8px;">No entries logged for this period.</div>';
+  // Legend
+  const leg=document.createElement('div');leg.className='legend-strip';
+  S.activities.forEach(a=>{const li=document.createElement('div');li.className='legend-item';
+    li.innerHTML=`<div class="legend-dot" style="background:${a.color}"></div>${a.name}`;leg.appendChild(li);});
+  card.appendChild(leg);content.appendChild(card);
+}
+
+function renderBar(content,agg,maxAgg){
+  const card=document.createElement('div');card.className='card';card.innerHTML='<h2>Activity Totals</h2>';
+  const chart=document.createElement('div');chart.className='bar-chart';
+  const sorted=[...S.activities].filter(a=>agg[a.id]>0).sort((a,b)=>agg[b.id]-agg[a.id]);
+  sorted.forEach(a=>{
+    const h=(agg[a.id]*24).toFixed(1);const frac=agg[a.id]/maxAgg;
+    const row=document.createElement('div');row.className='bc-row';
+    row.innerHTML=`<div class="bc-lbl">${a.name}</div>
+      <div class="bc-bar"><div class="bc-fill" style="width:${frac*100}%;background:${a.color};"></div></div>
+      <div class="bc-val">${h}h</div>`;
+    chart.appendChild(row);});
+  if(!sorted.length)chart.innerHTML='<div class="no-data">No data for this period.</div>';
+  card.appendChild(chart);content.appendChild(card);
+}
+
+function renderPie(content,agg,label){
+  const card=document.createElement('div');card.className='card';
+  card.innerHTML=`<h2>Pie — ${label}</h2>`;
+  const total=Object.values(agg).reduce((a,b)=>a+b,0);
+  if(total===0){card.innerHTML+='<div class="no-data">No data for this period.</div>';content.appendChild(card);return;}
+  const wrap=document.createElement('div');wrap.className='pie-wrap';
+  const SIZE=210,CX=105,CY=105,R=85;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width',SIZE);svg.setAttribute('height',SIZE);svg.setAttribute('viewBox',`0 0 ${SIZE} ${SIZE}`);
+  svg.style.flexShrink='0';
+  const bg=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  bg.setAttribute('cx',CX);bg.setAttribute('cy',CY);bg.setAttribute('r',R);bg.setAttribute('fill','var(--surface2)');
+  svg.appendChild(bg);
+  let ang=-Math.PI/2;
+  const segs=[...S.activities].filter(a=>agg[a.id]>0).sort((a,b)=>agg[b.id]-agg[a.id]);
+  segs.forEach(a=>{
+    const frac=agg[a.id]/total,da=frac*2*Math.PI,end=ang+da;
+    const x1=CX+R*Math.cos(ang),y1=CY+R*Math.sin(ang),x2=CX+R*Math.cos(end),y2=CY+R*Math.sin(end);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',`M${CX},${CY} L${x1},${y1} A${R},${R},0,${da>Math.PI?1:0},1,${x2},${y2} Z`);
+    path.setAttribute('fill',a.color);path.setAttribute('opacity','0.9');path.style.cursor='default';path.style.transition='opacity 0.12s';
+    path.addEventListener('mouseenter',()=>path.setAttribute('opacity','0.7'));
+    path.addEventListener('mouseleave',()=>path.setAttribute('opacity','0.9'));
+    const ti=document.createElementNS('http://www.w3.org/2000/svg','title');
+    ti.textContent=`${a.name}: ${(frac*100).toFixed(1)}% (${(agg[a.id]*24).toFixed(1)}h)`;path.appendChild(ti);
+    svg.appendChild(path);ang=end;
+  });
+  const hole=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  hole.setAttribute('cx',CX);hole.setAttribute('cy',CY);hole.setAttribute('r',R*0.44);hole.setAttribute('fill','var(--surface)');
+  svg.appendChild(hole);
+  const txt1=document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt1.setAttribute('x',CX);txt1.setAttribute('y',CY-4);txt1.setAttribute('text-anchor','middle');
+  txt1.setAttribute('fill','var(--text)');txt1.setAttribute('font-family','Syne,sans-serif');txt1.setAttribute('font-size','15');txt1.setAttribute('font-weight','700');
+  txt1.textContent=(total*24).toFixed(1)+'h';svg.appendChild(txt1);
+  const txt2=document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt2.setAttribute('x',CX);txt2.setAttribute('y',CY+13);txt2.setAttribute('text-anchor','middle');
+  txt2.setAttribute('fill','var(--muted)');txt2.setAttribute('font-family','DM Mono,monospace');txt2.setAttribute('font-size','8');
+  txt2.textContent='logged';svg.appendChild(txt2);
+  wrap.appendChild(svg);
+  const legCol=document.createElement('div');legCol.className='pie-legend';
+  segs.forEach(a=>{
+    const frac=agg[a.id]/total;const li=document.createElement('div');li.className='pie-legend-item';
+    li.innerHTML=`<div class="pie-dot" style="background:${a.color}"></div><span style="color:var(--text)">${a.name}</span>
+      <span class="pie-legend-val">${(frac*100).toFixed(1)}% &nbsp;${(agg[a.id]*24).toFixed(1)}h</span>`;
+    legCol.appendChild(li);});
+  wrap.appendChild(legCol);card.appendChild(wrap);content.appendChild(card);
+}
+
+// ── INIT ───────────────────────────────────────────────
+load();renderActivities();renderLog();
+</script>
+</body>
+</html>
