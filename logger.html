@@ -26,8 +26,13 @@
   .section-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; }
 
   /* ACTIVITIES */
-  .activity-item { display: flex; align-items: center; gap: 10px; padding: 8px 11px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 5px; }
-  .color-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; cursor: pointer; transition: transform 0.15s; }
+  .activity-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-bottom:4px;cursor:grab;}
+  .activity-item.dragging{opacity:.4;cursor:grabbing;}
+  .activity-item.drag-over{border-color:var(--accent);background:rgba(200,240,96,.06);}
+  .drag-handle{display:flex;flex-direction:column;gap:2px;cursor:grab;padding:2px 3px;flex-shrink:0;}
+  .drag-handle span{display:block;width:12px;height:1.5px;background:var(--muted);border-radius:1px;}
+  .drag-handle:hover span{background:var(--accent);}
+  .color-dot { width:12px;height:12px; border-radius: 50%; flex-shrink: 0; cursor: pointer; transition: transform 0.15s; }
   .color-dot:hover { transform: scale(1.25); }
   .activity-name { flex: 1; background: transparent; border: none; color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.83rem; outline: none; }
   .activity-name:focus { color: var(--accent); }
@@ -36,7 +41,7 @@
   .add-btn { display: flex; align-items: center; gap: 8px; padding: 8px 11px; background: transparent; border: 1px dashed var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.79rem; transition: all 0.15s; width: 100%; margin-top: 7px; }
   .add-btn:hover { border-color: var(--accent); color: var(--accent); }
   .color-picker-popup { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px; display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; z-index: 200; box-shadow: 0 8px 28px rgba(0,0,0,0.65); }
-  .color-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.12s; }
+  .color-swatch { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.12s; }
   .color-swatch:hover { transform: scale(1.2); border-color: white; }
 
   /* LOG */
