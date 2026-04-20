@@ -239,22 +239,37 @@
       <div class="period-toggle">
         <button class="period-btn active" id="pb-day" onclick="setPeriod('day')">Day</button>
         <button class="period-btn" id="pb-week" onclick="setPeriod('week')">Week</button>
+        <button class="period-btn" id="pb-month" onclick="setPeriod('month')">Month</button>
         <button class="period-btn" id="pb-year" onclick="setPeriod('year')">Year</button>
-      </div>
-      <div class="chart-toggle">
-        <button class="chart-btn active" id="cb-timeline" onclick="setChart('timeline')">Timeline</button>
-        <button class="chart-btn" id="cb-bar" onclick="setChart('bar')">Bar</button>
-        <button class="chart-btn" id="cb-pie" onclick="setChart('pie')">Pie</button>
       </div>
       <div class="nav-group">
         <button class="nav-btn" onclick="totalsNav(-1)">←</button>
-        <div class="nav-label" id="totalsNavLabel" style="min-width:155px;font-size:0.88rem;"></div>
+        <div class="nav-label-btn" id="totalsNavLabel" style="min-width:155px;font-size:0.88rem;" onclick="openTotalsCal()"></button>
         <button class="nav-btn" onclick="totalsNav(1)">→</button>
       </div>
       <button class="now-btn" onclick="totalsGoNow()">now</button>
     </div>
   </div>
   <div id="totalsContent"></div>
+</div>
+
+<!-- ACTIVITY PICKER MODAL -->
+<div class="act-modal-overlay" id="actModal" style="display:none;" onclick="closeActModal()">
+  <div class="act-modal" onclick="event.stopPropagation()">
+    <h3>Choose an activity</h3>
+    <div id="actModalList"></div>
+  </div>
+</div>
+
+<!-- CALENDAR OVERLAY -->
+<div class="cal-overlay" id="calOverlay" style="display:none;" onclick="closeCal()"></div>
+<div class="cal-popup" id="calPopup" style="display:none;">
+  <div class="cal-popup-hdr">
+    <button class="cal-nav" id="calPrev" onclick="calNavMonth(-1)">‹</button>
+    <div class="cal-popup-title" id="calTitle" onclick="calCycleView()"></div>
+    <button class="cal-nav" id="calNext" onclick="calNavMonth(1)">›</button>
+  </div>
+  <div id="calBody"></div>
 </div>
 
 <script>
