@@ -74,9 +74,6 @@
   .cal-year-btn:hover{background:var(--surface2);}
   .cal-year-btn.selected{background:var(--accent);color:var(--bg);}
 
-
-
-
   /* LOG */
   .log-controls { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
   .view-toggle, .period-toggle, .chart-toggle { display: flex; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); overflow: hidden; }
@@ -151,7 +148,7 @@
   /* Timeline bars */
   .tl-row { display: flex; align-items: center; gap: 9px; margin-bottom: 5px; }
   .tl-lbl { font-size: 0.7rem; color: var(--muted); width: 26px; text-align: right; flex-shrink: 0; font-family: 'Syne', sans-serif; }
-  .tl-bar { flex: 1; height: 28px; background: var(--surface2); border-radius: 5px; overflow: hidden; display: flex; border: 1px solid var(--border); position: relative; }
+  .tl-bar { flex: 1; height: 28px; background: var(--surface2); border-radius: 5px; overflow: hidden; display: flex; border: 1px solid var(--border);}
   .tl-total { font-size: 0.68rem; color: var(--muted); width: 68px; text-align: right; flex-shrink: 0; }
   .bar-seg { height: 100%; position: relative; cursor: default; transition: opacity 0.12s; }
   .bar-seg:hover { opacity: 0.75; }
@@ -160,6 +157,18 @@
   .time-axis { display: flex; margin-left: 35px; margin-bottom: 2px; }
   .time-tick { font-size: 0.59rem; color: var(--muted); flex: 1; }
 
+  /* MONTH CALENDAR VIEW (totals) */
+  .month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);}
+  .month-cell{background:var(--surface);padding:5px;min-height:72px;display:flex;flex-direction:column;gap:3px;}
+  .month-cell.other-m{background:var(--bg);}
+  .month-cell-date{font-size:0.65rem;color:var(--muted);font-family:'Syne',sans-serif;font-weight:700;}
+  .month-cell.today-cell .month-cell-date{color:var(--accent);}
+  .month-bar-wrap{flex:1;display:flex;gap:1px;align-items:flex-end;height:32px;}
+  .month-bar-seg{flex:1;border-radius:1px;min-height:2px;transition:opacity .12s;}
+  .month-bar-seg:hover{opacity:.7;}
+  /* Github-style heatmap dot */
+  .month-dot{width:6px;height:6px;border-radius:50%;margin-top:2px;}
+
   /* Pie */
   .pie-wrap { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
   .pie-legend { display: flex; flex-direction: column; gap: 7px; }
@@ -167,23 +176,13 @@
   .pie-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .pie-legend-val { color: var(--muted); margin-left: auto; padding-left: 14px; }
 
-  /* Bar chart */
-  .bar-chart { display: flex; flex-direction: column; gap: 7px; }
-  .bc-row { display: flex; align-items: center; gap: 9px; }
-  .bc-lbl { font-size: 0.74rem; color: var(--muted); width: 96px; text-align: right; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bc-bar { flex: 1; height: 20px; background: var(--surface2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
-  .bc-fill { height: 100%; border-radius: 4px; transition: width 0.5s cubic-bezier(.4,0,.2,1); }
-  .bc-val { font-size: 0.7rem; color: var(--muted); width: 46px; }
-
   .legend-strip { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 11px; }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.71rem; color: var(--muted); }
   .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-
   .summary-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(125px,1fr)); gap: 7px; }
   .summary-item { background: var(--surface2); border-radius: 7px; padding: 10px 11px; }
   .summary-name { font-size: 0.69rem; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
   .summary-val { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; }
-
   .save-indicator { font-size: 0.67rem; color: var(--accent); opacity: 0; transition: opacity 0.3s; }
   .save-indicator.show { opacity: 1; }
   select option { background: #18181c; }
