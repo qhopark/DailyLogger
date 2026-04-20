@@ -82,12 +82,11 @@
   .view-toggle, .period-toggle, .chart-toggle { display: flex; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); overflow: hidden; }
   .view-btn, .period-btn, .chart-btn { padding: 6px 13px; border: none; background: transparent; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.75rem; cursor: pointer; transition: all 0.15s; }
   .view-btn.active { background: var(--accent); color: var(--bg); }
-  .period-btn.active { background: var(--accent); color: var(--bg); }
-  .chart-btn.active { background: var(--accent2); color: var(--bg); }
   .nav-group { display: flex; align-items: center; gap: 7px; }
   .nav-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 11px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.83rem; transition: all 0.15s; }
   .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .nav-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; min-width: 175px; text-align: center; }
+  .nav-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.95rem; min-width: 175px; text-align: center; background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;transition:all .15s;color:var(--text);}
+  .nav-label-btn:hover{border-color:var(--accent2);color:var(--accent2);}
   .now-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 11px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.74rem; transition: all 0.15s; }
   .now-btn:hover { border-color: var(--accent2); color: var(--accent2); }
 
