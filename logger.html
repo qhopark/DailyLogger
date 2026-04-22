@@ -273,47 +273,77 @@
 </div>
 
 <script>
-// ── CONSTANTS ──────────────────────────────────────────
+
+// ── CONSTANTS ────────────────────────────────────────── 
+
 const COLORS=['#c8f060','#60c8f0','#f060a8','#f0a060','#a060f0','#60f0a0','#f0f060','#f06060','#60a0f0','#f0c060','#80e0c0','#e080c0','#c0e080','#80c0e0','#e0c080','#ff8c69','#69b4ff','#b469ff','#69ffb4','#ffb469','#ff6969','#69ff69','#6969ff','#ffd700','#00ced1','#ff69b4','#adff2f','#ff4500','#1e90ff','#32cd32','#ff1493','#00fa9a','#ff6347','#4169e1','#ffa07a'];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_L=['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+
 // ── STATE ──────────────────────────────────────────────
+
 let S = {
   activities:[
   ],
   logs:{},
   nextId:100,
 };
-
 let logView='day', logDate=todayStr(), logWeekOff=0;
-let totalsPeriod='day', totalsChart='timeline', totalsOff=0;
+let totalsPeriod='day', totalsOff=0;
+// Calendar popup state
+let calCtx=null; // {for:'log'|'totals', view:'day'|'month'|'year', year, month}
+let calViewLevel='day'; // 'day' | 'month' | 'year'
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
+// Drag state (entries)
+let dragSrcDate=null,dragSrcIdx=null;
+// Drag state (activities)
+let actDragSrc=null;
+
 
 // ── PERSIST ────────────────────────────────────────────
-function save(){
-  try{localStorage.setItem('dlg3',JSON.stringify(S));}catch(e){}
-  const el=document.getElementById('saveIndicator');
-  el.classList.add('show'); clearTimeout(el._t);
-  el._t=setTimeout(()=>el.classList.remove('show'),1100);
-}
-function load(){try{const d=localStorage.getItem('dlg3');if(d)S=JSON.parse(d);}catch(e){}}
 
-// ── UTILS ──────────────────────────────────────────────
+function save(){
+  try{localStorage.setItem('dlg4',JSON.stringify(S));}catch(e){}
+  const el=document.getElementById('saveInd');el.classList.add('show');
+  clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),1100);
+}
+function load(){try{const d=localStorage.getItem('dlg4');if(d)S=JSON.parse(d);}catch(e){}}
+
+
+// ── UTILS ──────────────────────────────────────────────  
+
 function todayStr(){return new Date().toISOString().slice(0,10);}
 function addDays(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
-function parseTime(s){if(!s)return null;const p=s.split(':');if(p.length<2)return null;const h=+p[0],m=+p[1];if(isNaN(h)||isNaN(m))return null;return(h*60+m)/1440;}
-function decToTime(v){if(v==null)return'';v=((v%1)+1)%1;const t=Math.round(v*1440),h=Math.floor(t/60)%24,m=t%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+function parseTime24(s){if(!s)return null;const p=s.split(':');if(p.length<2)return null;const h=+p[0],m=+p[1];if(isNaN(h)||isNaN(m))return null;return(h*60+m)/1440;}
+function decToTime24(v){if(v==null)return'';v=((v%1)+1)%1;const t=Math.round(v*1440),h=Math.floor(t/60)%24,m=t%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+// AM/PM display: used for all visible time labels
+function decToAMPM(v){
+  if(v==null)return'';
+  v=((v%1)+1)%1;
+  const t=Math.round(v*1440),h24=Math.floor(t/60)%24,m=t%60;
+  const ampm=h24<12?'am':'pm';
+  const h=h24%12||12;
+  return h+':'+(m<10?'0':'')+m+ampm;
+}
 function fmtDur(v){if(v==null||v<0)return'';let t=v*24;if(t<0)t+=24;const h=Math.floor(t),m=Math.round((t-h)*60);if(h===0)return m+'m';if(m===0)return h+'h';return h+'h'+m+'m';}
-function fmtDate(ds){const d=new Date(ds+'T12:00:00');return DAYS[d.getDay()]+' '+MONTHS[d.getMonth()]+' '+d.getDate();}
+function fmtDate(ds){const d=new Date(ds+'T12:00:00');return DAYS[d.getDay()]+' '+MONTHS_S[d.getMonth()]+' '+d.getDate();}
 function weekSun(off){const t=new Date();t.setHours(12,0,0,0);t.setDate(t.getDate()-t.getDay()+off*7);return t.toISOString().slice(0,10);}
 function actById(id){return S.activities.find(a=>a.id===id);}
 function dayEntries(ds){return S.logs[ds]||[];}
 function startOf(ds,i){return i===0?0:(dayEntries(ds)[i-1]?.endTime??null);}
 function calcDur(s,e){if(s==null||e==null)return null;let d=e-s;if(d<0)d+=1;return d;}
 function actOpts(sel){return'<option value="">— pick —</option>'+S.activities.map(a=>`<option value="${a.id}"${a.id===sel?' selected':''}>${a.name}</option>`).join('');}
+function hasAnyLog(ds){const e=dayEntries(ds);return e.some(x=>x.activityId&&x.endTime!=null);}
+function loggedFraction(ds){
+  let tot=0;dayEntries(ds).forEach((e,i)=>{const s=startOf(ds,i),en=e.endTime===1?1:e.endTime;if(s==null||en==null)return;let d=en-s;if(d<0)d+=1;tot+=d;});
+  return Math.min(tot,1);
+}
+
 
 // ── TAB ────────────────────────────────────────────────
+
 function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
@@ -323,15 +353,23 @@ function switchTab(name){
   if(name==='totals')renderTotals();
 }
 
+
 // ── ACTIVITIES ─────────────────────────────────────────
+
 function renderActivities(){
-  const el=document.getElementById('activityList');
-  el.innerHTML='';
-  S.activities.forEach(a=>{
-    const row=document.createElement('div');row.className='activity-item';
-    row.innerHTML=`<div class="color-dot" style="background:${a.color}" onclick="openPicker(event,${a.id})"></div>
+  const el=document.getElementById('activityList');el.innerHTML='';
+  S.activities.forEach((a,idx)=>{
+    const row=document.createElement('div');row.className='activity-item';row.draggable=true;row.dataset.idx=idx;
+    row.innerHTML=`<div class="drag-handle"><span></span><span></span><span></span></div>
+      <div class="color-dot" style="background:${a.color}" onclick="openPicker(event,${a.id})"></div>
       <input class="activity-name" value="${a.name}" onchange="renameAct(${a.id},this.value)" onblur="renameAct(${a.id},this.value)"/>
       <button class="delete-btn" onclick="deleteAct(${a.id})">✕</button>`;
+    // Drag events
+    row.addEventListener('dragstart',e=>{actDragSrc=idx;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    row.addEventListener('dragend',()=>{row.classList.remove('dragging');document.querySelectorAll('.activity-item').forEach(r=>r.classList.remove('drag-over'));});
+    row.addEventListener('dragover',e=>{e.preventDefault();row.classList.add('drag-over');});
+    row.addEventListener('dragleave',()=>row.classList.remove('drag-over'));
+    row.addEventListener('drop',e=>{e.preventDefault();row.classList.remove('drag-over');if(actDragSrc===null)return;const tgt=+row.dataset.idx;if(actDragSrc===tgt)return;const moved=S.activities.splice(actDragSrc,1)[0];S.activities.splice(tgt,0,moved);actDragSrc=null;save();renderActivities();});
     el.appendChild(row);
   });
 }
@@ -343,23 +381,56 @@ function addActivity(){
 function renameAct(id,v){const a=S.activities.find(a=>a.id===id);if(a)a.name=v.trim()||a.name;save();}
 function deleteAct(id){S.activities=S.activities.filter(a=>a.id!==id);save();renderActivities();}
 function openPicker(e,id){
-  e.stopPropagation();
-  const p=document.getElementById('colorPicker');p.innerHTML='';
+  e.stopPropagation();const p=document.getElementById('colorPicker');p.innerHTML='';
   COLORS.forEach(c=>{const sw=document.createElement('div');sw.className='color-swatch';sw.style.background=c;
     const a=S.activities.find(a=>a.id===id);if(a&&a.color===c)sw.style.borderColor='white';
     sw.onclick=ev=>{ev.stopPropagation();const ax=S.activities.find(a=>a.id===id);if(ax)ax.color=c;save();renderActivities();p.style.display='none';};
     p.appendChild(sw);});
-  p.style.display='grid';const r=e.target.getBoundingClientRect();
-  p.style.top=(r.bottom+5)+'px';p.style.left=r.left+'px';
+  p.style.display='grid';const r=e.target.getBoundingClientRect();p.style.top=(r.bottom+5)+'px';p.style.left=r.left+'px';
 }
-document.addEventListener('click',()=>document.getElementById('colorPicker').style.display='none');
+document.addEventListener('click',()=>{document.getElementById('colorPicker').style.display='none';});
+
+
+// ══════════════════════════════════════════
+// ACTIVITY PICKER MODAL
+// ══════════════════════════════════════════
+let _actModalCb=null;
+let _lastPickedActId=null; // remember last chosen activity
+
+function openActModal(cb){
+  _actModalCb=cb;
+  const list=document.getElementById('actModalList');list.innerHTML='';
+  S.activities.forEach(a=>{
+    const opt=document.createElement('div');opt.className='act-option';
+    if(a.id===_lastPickedActId)opt.style.background='var(--surface2)';
+    opt.innerHTML=`<div class="act-option-dot" style="background:${a.color}"></div><div class="act-option-name">${a.name}</div>`;
+    opt.onclick=()=>{
+      const chosenId=a.id;
+      _lastPickedActId=chosenId;
+      // Close modal first
+      document.getElementById('actModal').style.display='none';
+      const savedCb=_actModalCb;
+      _actModalCb=null;
+      // Then invoke callback (so DOM is clean before re-render)
+      if(savedCb)savedCb(chosenId);
+    };
+    list.appendChild(opt);
+  });
+  document.getElementById('actModal').style.display='flex';
+}
+function closeActModal(){document.getElementById('actModal').style.display='none';_actModalCb=null;}
+
 
 // ── LOG ────────────────────────────────────────────────
+
 function setLogView(v){
   logView=v;
   document.getElementById('vbDay').classList.toggle('active',v==='day');
   document.getElementById('vbWeek').classList.toggle('active',v==='week');
-  if(v==='week'){const d=new Date(logDate+'T12:00:00');const dow=d.getDay();const sun=addDays(logDate,-dow);const ts=weekSun(0);const ms=Math.round((new Date(sun)-new Date(ts))/(7*86400000));logWeekOff=ms;}
+  if(v==='week'){
+    const d=new Date(logDate+'T12:00:00');const sun=addDays(logDate,-d.getDay());
+    const ts=weekSun(0);const ms=Math.round((new Date(sun)-new Date(ts))/(7*86400000));logWeekOff=ms;
+  }
   renderLog();
 }
 function logNav(d){if(logView==='day')logDate=addDays(logDate,d);else logWeekOff+=d;renderLog();}
@@ -369,128 +440,289 @@ function renderLog(){
   const todayS=todayStr();
   if(logView==='day'){
     document.getElementById('logNavLabel').textContent=fmtDate(logDate);
-    const c=document.getElementById('logContent');c.innerHTML='';
-    c.appendChild(buildDayCard(logDate,true));
+    const c=document.getElementById('logContent');c.innerHTML='';c.appendChild(buildDayCard(logDate,true));
   } else {
-    const sun=weekSun(logWeekOff);const sat=addDays(sun,6);
-    const f=s=>{const d=new Date(s+'T12:00:00');return MONTHS[d.getMonth()]+' '+d.getDate();};
+    const sun=weekSun(logWeekOff),sat=addDays(sun,6);
+    const f=s=>{const d=new Date(s+'T12:00:00');return MONTHS_S[d.getMonth()]+' '+d.getDate();};
     document.getElementById('logNavLabel').textContent=f(sun)+' – '+f(sat);
     const c=document.getElementById('logContent');c.innerHTML='';
     const card=document.createElement('div');card.className='card';card.innerHTML='<h2>Week Log</h2>';
     const grid=document.createElement('div');grid.className='week-grid';
     for(let i=0;i<7;i++){const ds=addDays(sun,i);grid.appendChild(buildWeekCol(ds,ds===todayS));}
     card.appendChild(grid);c.appendChild(card);
-    // Auto-advance hint if past
-    if(todayS>sat){logWeekOff=0;}
+    if(todayS>sat)logWeekOff=0;
   }
+}
+
+// Helper: is a day fully complete (last entry ends at midnight = 1.0)?
+function isDayComplete(ds){
+  const e=dayEntries(ds);
+  return e.length>0&&e[e.length-1].endTime===1.0;
+}
+// Helper: total logged fraction (can exceed 1.0 if entries overlap)
+function totalLoggedRaw(ds){
+  let tot=0;
+  dayEntries(ds).forEach((e,i)=>{
+    const s=startOf(ds,i),en=e.endTime===1.0?1:e.endTime;
+    if(s==null||en==null)return;let d=en-s;if(d<0)d+=1;tot+=d;
+  });
+  return tot;
 }
 
 function buildDayCard(ds,editable){
   const card=document.createElement('div');card.className='card';card.style.maxWidth='680px';
   card.innerHTML=`<h2>${fmtDate(ds)}</h2>`;
   const entries=dayEntries(ds);
+  const complete=isDayComplete(ds);
+  const rawTotal=totalLoggedRaw(ds);
+  const overFlow=rawTotal>1.0001; // more than 24h logged
+
   entries.forEach((entry,idx)=>{
     const start=startOf(ds,idx);
-    const endIsMidday=entry.endTime===1.0; // rollover sentinel
-    const endDec=endIsMidday?null:entry.endTime;
-    const startStr=start!=null?(start>=1?'00:00':decToTime(start)):'—';
-    const endVal=endDec!=null?decToTime(endDec):'';
-    const dur=endIsMidday?calcDur(start,1):calcDur(start,endDec);
+    const isMidnight=entry.endTime===1.0;
+    const endDec=isMidnight?null:entry.endTime;
+    const startStr=start!=null?(start>=1?'12:00am':decToAMPM(start)):'—';
+    const endVal=endDec!=null?decToTime24(endDec):'';
+    const endDisplay=isMidnight?'12:00am':(endDec!=null?decToAMPM(endDec):'—');
+    const dur=isMidnight?calcDur(start,1):calcDur(start,endDec);
     const act=actById(entry.activityId);const color=act?act.color:'#444';
+
     const row=document.createElement('div');row.className='entry-row';
+    row.dataset.date=ds;row.dataset.idx=idx;
+
+    // Build row HTML: display end left of pencil btn; hide input wrap by default
     row.innerHTML=`
+      <div class="entry-drag-handle"><span></span><span></span><span></span></div>
       <div class="entry-color-bar" style="background:${color}"></div>
       <div class="entry-start">${startStr}</div>
       <div class="entry-arrow">→</div>
-      <input class="time-input" type="time" value="${endIsMidday?'00:00':endVal}"
-        data-date="${ds}" data-idx="${idx}" ${editable?'':'disabled'}
-        onchange="onTimeChange(this)"/>
+      <div class="entry-end-disp${endDisplay==='—'?' empty':''}">${endDisplay}</div>
+      <button class="time-edit-btn" title="Single click: scroll to change  •  Double click: type time">✎</button>
+      <div class="time-input-wrap">
+        <input class="time-input" type="time" value="${isMidnight?'00:00':endVal}"
+          data-date="${ds}" data-idx="${idx}"
+          onkeydown="onTimeKeydown(event,this)"
+          onchange="onTimePickerChange(this)"/>
+        <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.8rem;padding:2px 4px;" onclick="commitTimeInput(this.previousElementSibling)" title="Done">✓</button>
+      </div>
       <select class="activity-select" data-date="${ds}" data-idx="${idx}"
         onchange="onActChange(this)" ${editable?'':'disabled'}>
         ${actOpts(entry.activityId)}
       </select>
       <div class="entry-duration">${fmtDur(dur)}</div>
-      ${entry.rollover?'<span class="badge badge-roll">→midnight</span>':''}
+      ${entry.rollover?'<span class="badge badge-roll">→mid</span>':''}
       ${entry.fromRollover?'<span class="badge badge-from">+1d</span>':''}
       ${editable?`<button class="delete-btn" data-date="${ds}" data-idx="${idx}" onclick="deleteEntry(this)">✕</button>`:''}`;
+
+    // Wire up pencil button: single click = scroll picker, double click = type
+    const pencilBtn=row.querySelector('.time-edit-btn');
+    const inputWrap=row.querySelector('.time-input-wrap');
+    const timeInput=row.querySelector('.time-input');
+    const endDisp=row.querySelector('.entry-end-disp');
+
+    if(editable){
+      pencilBtn.addEventListener('click',()=>{
+        // Single click: show input in scroll/picker mode
+        endDisp.style.display='none';
+        pencilBtn.style.display='none';
+        inputWrap.classList.add('active');
+        timeInput.click();
+        timeInput.focus();
+      });
+      pencilBtn.addEventListener('dblclick',(e)=>{
+        e.stopPropagation();
+        // Double click: show input for keyboard typing
+        endDisp.style.display='none';
+        pencilBtn.style.display='none';
+        inputWrap.classList.add('active');
+        timeInput.focus();
+      });
+      // Wire ✓ button to commit
+      const confirmBtn=inputWrap.querySelector('button');
+      confirmBtn.onclick=()=>commitTimeInput(timeInput);
+      // Commit when clicking outside (blur)
+      timeInput.addEventListener('blur', () => {
+        // small timeout prevents conflict when clicking ✓
+        setTimeout(() => {
+          if (inputWrap.classList.contains('active')) {
+            commitTimeInput(timeInput);
+          }
+        }, 100);
+      });
+    } else {
+      pencilBtn.style.display='none';
+    }
+
+    // Drag/drop reorder
+    if(editable){
+      row.draggable=true;
+      row.addEventListener('dragstart',e=>{dragSrcDate=ds;dragSrcIdx=idx;row.style.opacity='0.4';e.dataTransfer.effectAllowed='move';});
+      row.addEventListener('dragend',()=>{row.style.opacity='1';document.querySelectorAll('.entry-row').forEach(r=>r.classList.remove('drag-over-entry'));});
+      row.addEventListener('dragover',e=>{e.preventDefault();row.classList.add('drag-over-entry');});
+      row.addEventListener('dragleave',()=>row.classList.remove('drag-over-entry'));
+      row.addEventListener('drop',e=>{
+        e.preventDefault();row.classList.remove('drag-over-entry');
+        if(dragSrcDate!==ds||dragSrcIdx===null)return;
+        const tgt=+row.dataset.idx;if(dragSrcIdx===tgt)return;
+        const ents=dayEntries(ds);const moved=ents.splice(dragSrcIdx,1)[0];
+        moved.endTime=null;
+        ents.splice(tgt,0,moved);S.logs[ds]=ents;
+        dragSrcDate=null;dragSrcIdx=null;save();renderLog();
+      });
+    }
     card.appendChild(row);
   });
+
+  // Overflow warning
+  if(overFlow){
+    const warn=document.createElement('div');warn.className='overflow-warning';
+    warn.textContent=`⚠ Total logged exceeds 24h (${(rawTotal*24).toFixed(1)}h) — check for overlapping entries.`;
+    card.appendChild(warn);
+  }
+
   if(editable){
-    const btn=document.createElement('button');btn.className='add-entry-btn';btn.textContent='+ add entry';
-    btn.onclick=()=>{addEntry(ds);};card.appendChild(btn);
+    if(complete){
+      // Day complete — show locked bar with edit button
+      const bar=document.createElement('div');bar.className='day-complete-bar';
+      bar.innerHTML=`<span class="day-complete-msg">✓ Day complete — 12:00am reached</span>`;
+      const editBtn=document.createElement('button');editBtn.className='edit-entries-btn';editBtn.textContent='Edit entries';
+      editBtn.onclick=()=>{
+        bar.remove();
+        // Show add-entry button
+        const addBtn=buildAddEntryBtn(ds);card.appendChild(addBtn);
+      };
+      bar.appendChild(editBtn);
+      card.appendChild(bar);
+    } else {
+      card.appendChild(buildAddEntryBtn(ds));
+    }
   }
   return card;
+}
+
+function buildAddEntryBtn(ds){
+  const btn=document.createElement('button');btn.className='add-entry-btn';btn.textContent='+ add entry';
+  btn.onclick=()=>{
+    openActModal(actId=>{
+      if(!S.logs[ds])S.logs[ds]=[];
+      S.logs[ds].push({id:S.nextId++,endTime:null,activityId:actId});
+      save();renderLog();
+    });
+  };
+  return btn;
+}
+
+function onTimePickerChange(input){
+  // Live-update the display label so user sees what they picked, but don't commit yet
+  const v=parseTime24(input.value);
+  const row=input.closest('.entry-row');if(!row)return;
+  const disp=row.querySelector('.entry-end-disp');
+  if(disp&&v!=null)disp.textContent=decToAMPM(v);
+}
+
+function onTimeKeydown(e,input){
+  if(e.key==='Enter'){
+    e.preventDefault();
+    commitTimeInput(input);
+  } else if(e.key==='Escape'){
+    collapseTimeInput(input);
+  }
+}
+
+function commitTimeInput(input){
+  onTimeChange(input);      // commit the value
+  collapseTimeInput(input); // then close
+}
+
+function collapseTimeInput(inputEl){
+  const row=inputEl.closest('.entry-row');if(!row)return;
+  const wrap=row.querySelector('.time-input-wrap');
+  const pencil=row.querySelector('.time-edit-btn');
+  const disp=row.querySelector('.entry-end-disp');
+  if(wrap)wrap.classList.remove('active');
+  if(pencil)pencil.style.display='';
+  if(disp)disp.style.display='';
 }
 
 function buildWeekCol(ds,isToday){
   const col=document.createElement('div');col.className='week-col';
   const d=new Date(ds+'T12:00:00');
   const hdr=document.createElement('div');hdr.className='week-col-hdr'+(isToday?' today-col':'');
-  hdr.textContent=DAYS[d.getDay()]+' '+d.getDate();col.appendChild(hdr);
-  const entries=dayEntries(ds);
-  entries.forEach((entry,idx)=>{
+  hdr.textContent=DAYS[d.getDay()]+' '+d.getDate();
+  if(isOverflow(ds))hdr.classList.add('over');
+  col.appendChild(hdr);
+  dayEntries(ds).forEach((entry,idx)=>{
     const act=actById(entry.activityId);const color=act?act.color:'#555';
     const start=startOf(ds,idx);const end=entry.endTime===1.0?1:entry.endTime;
     const dur=calcDur(start,end);
     const el=document.createElement('div');el.className='week-entry';el.style.borderLeftColor=color;
     el.innerHTML=`<div class="we-name">${act?act.name:'—'}</div>
-      <div class="we-time">${decToTime(start>=1?0:start)}–${end!=null?decToTime(end):'?'} ${dur?'('+fmtDur(dur)+')':''}</div>`;
+      <div class="we-time">${decToAMPM(start>=1?0:start)}–${end!=null?decToAMPM(end):'?'} ${dur?'('+fmtDur(dur)+')':''}</div>`;
     el.onclick=()=>{logDate=ds;setLogView('day');};col.appendChild(el);
   });
   const addBtn=document.createElement('div');addBtn.className='week-add';addBtn.textContent='+';
-  addBtn.onclick=()=>{logDate=ds;setLogView('day');addEntry(ds);};col.appendChild(addBtn);
-  return col;
-}
-
-function addEntry(ds){
-  if(!S.logs[ds])S.logs[ds]=[];
-  S.logs[ds].push({id:S.nextId++,endTime:null,activityId:null});
-  save();renderLog();
+  const capturedDs=ds;
+  addBtn.onclick=()=>openActModal(actId=>{
+    if(!S.logs[capturedDs])S.logs[capturedDs]=[];
+    S.logs[capturedDs].push({id:S.nextId++,endTime:null,activityId:actId});
+    save();logDate=capturedDs;setLogView('day');
+  });
+  col.appendChild(addBtn);return col;
 }
 
 function onTimeChange(input){
   const ds=input.dataset.date,idx=+input.dataset.idx;
   const entries=dayEntries(ds);if(!entries[idx])return;
-  const newEnd=parseTime(input.value);
+  const newEnd=parseTime24(input.value);
   const start=startOf(ds,idx);
-
-  // Midnight rollover: newEnd < start means crossed midnight
   if(newEnd!==null&&start!==null&&newEnd<start){
-    // Mark current entry as rolling over at midnight
+    // MIDNIGHT ROLLOVER
     entries[idx].endTime=1.0;entries[idx].rollover=true;
-    // Carry rest to next day
     const nextDs=addDays(ds,1);
+    const nextHasEntries=S.logs[nextDs]&&S.logs[nextDs].length>0;
     if(!S.logs[nextDs])S.logs[nextDs]=[];
     const nextE=S.logs[nextDs];
-    // Replace or insert rollover entry at front
-    if(nextE.length>0&&nextE[0].fromRollover){
-      nextE[0].endTime=newEnd;nextE[0].activityId=entries[idx].activityId;
+    if(nextHasEntries){
+      // Existing entries on next day — just add a blank entry with the activity, warn user
+      // Remove any stale fromRollover entry from this same source first
+      const staleIdx=nextE.findIndex(e=>e.fromRollover&&e._rolloverFrom===entries[idx].id);
+      if(staleIdx>=0)nextE.splice(staleIdx,1);
+      // Add blank entry at start
+      nextE.unshift({id:S.nextId++,endTime:null,activityId:entries[idx].activityId,fromRollover:true,_rolloverFrom:entries[idx].id});
+      // Show warning notice
+      const notice=document.createElement('div');notice.className='rollover-notice';
+      notice.style.borderColor='rgba(240,96,168,.4)';notice.style.background='rgba(240,96,168,.07)';notice.style.color='var(--accent3)';
+      notice.textContent=`⚠ Entries exist on ${fmtDate(nextDs)} — re-enter end time for ${actById(entries[idx].activityId)?.name||'this activity'} there.`;
+      const card=input.closest('.card');card.querySelectorAll('.rollover-notice').forEach(n=>n.remove());card.appendChild(notice);
+      save();
+      setTimeout(()=>{logDate=nextDs;renderLog();},1400);
     } else {
-      nextE.unshift({id:S.nextId++,endTime:newEnd,activityId:entries[idx].activityId,fromRollover:true});
+      // No existing entries — insert clean rollover continuation
+      nextE.unshift({id:S.nextId++,endTime:newEnd,activityId:entries[idx].activityId,fromRollover:true,_rolloverFrom:entries[idx].id});
+      const notice=document.createElement('div');notice.className='rollover-notice';
+      notice.textContent=`↪ Rolled over midnight → moving to ${fmtDate(nextDs)}…`;
+      const card=input.closest('.card');card.querySelectorAll('.rollover-notice').forEach(n=>n.remove());card.appendChild(notice);
+      save();
+      setTimeout(()=>{logDate=nextDs;renderLog();},900);
     }
-    // Show notice
-    const notice=document.createElement('div');notice.className='rollover-notice';
-    notice.textContent=`↪ Rolled over midnight → continues on ${fmtDate(nextDs)} until ${decToTime(newEnd)}`;
-    const existingCard=input.closest('.card');
-    existingCard.querySelectorAll('.rollover-notice').forEach(n=>n.remove());
-    existingCard.appendChild(notice);setTimeout(()=>notice.remove(),4500);
   } else {
     entries[idx].endTime=newEnd;
     if(entries[idx].rollover){
       entries[idx].rollover=false;
-      // Remove rollover from next day if existed
       const nextDs=addDays(ds,1);const ne=S.logs[nextDs];
-      if(ne&&ne[0]&&ne[0].fromRollover){ne.splice(0,1);if(!ne.length)delete S.logs[nextDs];}
+      if(ne){
+        const si=ne.findIndex(e=>e.fromRollover&&e._rolloverFrom===entries[idx].id);
+        if(si>=0){ne.splice(si,1);if(!ne.length)delete S.logs[nextDs];}
+      }
     }
+    save();renderLog();
   }
-  save();renderLog();
 }
 
 function onActChange(sel){
   const ds=sel.dataset.date,idx=+sel.dataset.idx;
   const entries=dayEntries(ds);if(!entries[idx])return;
   const actId=+sel.value||null;entries[idx].activityId=actId;
-  // propagate to rollover continuation
   if(entries[idx].rollover){const nd=addDays(ds,1);const ne=S.logs[nd];if(ne&&ne[0]&&ne[0].fromRollover)ne[0].activityId=actId;}
   save();renderLog();
 }
@@ -500,22 +732,230 @@ function deleteEntry(btn){
   const entries=dayEntries(ds);
   if(entries[idx]?.rollover){
     const nd=addDays(ds,1);const ne=S.logs[nd];
-    if(ne&&ne[0]&&ne[0].fromRollover){ne.splice(0,1);if(!ne.length)delete S.logs[nd];}
+    if(ne){
+      const si=ne.findIndex(e=>e.fromRollover&&e._rolloverFrom===entries[idx].id);
+      if(si>=0){ne.splice(si,1);if(!ne.length)delete S.logs[nd];}
+    }
   }
-  entries.splice(idx,1);
-  if(!entries.length)delete S.logs[ds];else S.logs[ds]=entries;
+  entries.splice(idx,1);if(!entries.length)delete S.logs[ds];else S.logs[ds]=entries;
   save();renderLog();
 }
 
-// ── TOTALS ─────────────────────────────────────────────
+// ══════════════════════════════════════════
+// CALENDAR POPUP
+// ══════════════════════════════════════════
+function openLogCal(){
+  calCtx='log';
+  // init to current logDate
+  const d=new Date(logDate+'T12:00:00');
+  calYear=d.getFullYear();calMonth=d.getMonth();calViewLevel='day';
+  openCal();
+}
+function openTotalsCal(){
+  calCtx='totals';
+  // Initialize calendar view to match current totals period
+  const info=getTotalsInfo();
+  if(totalsPeriod==='day'||totalsPeriod==='week'){
+    // Anchor to first date in the period
+    const anchorDs=info.dates[0];
+    const d=new Date(anchorDs+'T12:00:00');
+    calYear=d.getFullYear();calMonth=d.getMonth();calViewLevel='day';
+  } else if(totalsPeriod==='month'){
+    calYear=info.year;calMonth=info.month;calViewLevel='month';
+  } else {
+    calYear=info.year;calViewLevel='year';
+  }
+  openCal();
+}
+function openCal(){
+  const overlay=document.getElementById('calOverlay');const popup=document.getElementById('calPopup');
+  overlay.style.display='block';popup.style.display='block';
+  // Position near nav label
+  const btn=calCtx==='log'?document.getElementById('logNavLabel'):document.getElementById('totalsNavLabel');
+  const r=btn.getBoundingClientRect();
+  let left=r.left,top=r.bottom+6;
+  if(left+280>window.innerWidth)left=window.innerWidth-290;
+  popup.style.left=left+'px';popup.style.top=top+'px';
+  renderCalBody();
+}
+function closeCal(){
+  document.getElementById('calOverlay').style.display='none';
+  document.getElementById('calPopup').style.display='none';
+  calCtx=null;
+}
+function calNavMonth(d){
+  if(calViewLevel==='day'){calMonth+=d;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}}
+  else if(calViewLevel==='month'){calYear+=d;}
+  else if(calViewLevel==='year'){calYear+=d*12;}
+  renderCalBody();
+}
+function calCycleView(){
+  if(calViewLevel==='day')calViewLevel='month';
+  else if(calViewLevel==='month')calViewLevel='year';
+  else calViewLevel='day';
+  renderCalBody();
+}
+
+function renderCalBody(){
+  const todayS=todayStr();
+  // Current week dates for highlighting
+  let weekDates=[];
+  if(calCtx==='log'&&logView==='week'){const sun=weekSun(logWeekOff);for(let i=0;i<7;i++)weekDates.push(addDays(sun,i));}
+  if(calCtx==='totals'&&totalsPeriod==='week'){const info=getTotalsInfo();if(info.dates)weekDates=info.dates;}
+  const isWeekMode=(calCtx==='log'&&logView==='week')||(calCtx==='totals'&&totalsPeriod==='week');
+
+  document.getElementById('calTitle').textContent=
+    calViewLevel==='day'?`${MONTHS_L[calMonth]} ${calYear}`:
+    calViewLevel==='month'?String(calYear):`${calYear}–${calYear+11}`;
+
+  const body=document.getElementById('calBody');body.innerHTML='';
+
+  if(calViewLevel==='day'){
+    const dayNames=document.createElement('div');dayNames.className='cal-day-names';
+    ['S','M','T','W','T','F','S'].forEach(d=>{const dn=document.createElement('div');dn.className='cal-day-name';dn.textContent=d;dayNames.appendChild(dn);});
+    body.appendChild(dayNames);
+    const grid=document.createElement('div');grid.className='cal-days-grid';
+    const firstDay=new Date(calYear,calMonth,1).getDay();
+    const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+    const prevDays=new Date(calYear,calMonth,0).getDate();
+    const totalCells=Math.ceil((firstDay+daysInMonth)/7)*7;
+    // Build all cells first so we can do row-hover on them
+    const cellData=[];
+    for(let i=0;i<totalCells;i++){
+      let ds,otherMonth=false;
+      if(i<firstDay){
+        const pm=calMonth===0?11:calMonth-1;const py=calMonth===0?calYear-1:calYear;
+        ds=`${py}-${String(pm+1).padStart(2,'0')}-${String(prevDays-firstDay+i+1).padStart(2,'0')}`;otherMonth=true;
+      } else if(i>=firstDay+daysInMonth){
+        const day=i-firstDay-daysInMonth+1;const nm=calMonth===11?0:calMonth+1;const ny=calMonth===11?calYear+1:calYear;
+        ds=`${ny}-${String(nm+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;otherMonth=true;
+      } else {
+        const day=i-firstDay+1;ds=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      }
+      cellData.push({ds,otherMonth,row:Math.floor(i/7)});
+    }
+    // Group by row for hover behaviour
+    const rowMap={};
+    cellData.forEach(({ds,otherMonth,row},i)=>{
+      if(!rowMap[row])rowMap[row]=[];rowMap[row].push({ds,otherMonth,i});
+    });
+    cellData.forEach(({ds,otherMonth,row},i)=>{
+      const cell=document.createElement('div');cell.className='cal-cell';
+      cell.textContent=+ds.slice(-2);
+      if(otherMonth)cell.classList.add('other-month');
+      if(ds===todayS)cell.classList.add('today');
+      if(weekDates.includes(ds))cell.classList.add('in-week');
+      if(calCtx==='log'&&logView==='day'&&ds===logDate)cell.classList.add('selected');
+      if(calCtx==='totals'&&totalsPeriod==='day'){const info=getTotalsInfo();if(info.dates[0]===ds)cell.classList.add('selected');}
+      const frac=loggedFraction(ds);
+      if(frac>0.5)cell.classList.add('has-full-log');
+      else if(frac>0)cell.classList.add('has-log');
+      // Week row hover: highlight whole row when in week mode
+      if(isWeekMode){
+        cell.addEventListener('mouseenter',()=>{
+          const rowDs=rowMap[row].map(x=>x.ds);
+          grid.querySelectorAll('.cal-cell').forEach((c,ci)=>{
+            if(rowMap[Math.floor(ci/7)]&&rowMap[Math.floor(ci/7)].some(x=>rowDs.includes(x.ds)))
+              c.classList.add('row-hover');
+          });
+        });
+        cell.addEventListener('mouseleave',()=>grid.querySelectorAll('.cal-cell').forEach(c=>c.classList.remove('row-hover')));
+      }
+      cell.onclick=()=>calSelectDay(ds);
+      grid.appendChild(cell);
+    });
+    body.appendChild(grid);
+  } else if(calViewLevel==='month'){
+    const grid=document.createElement('div');grid.className='cal-months-grid';
+    MONTHS_S.forEach((m,i)=>{
+      const btn=document.createElement('div');btn.className='cal-month-btn';btn.textContent=m;
+      if(i===calMonth)btn.classList.add('selected');
+      btn.onclick=()=>calSelectMonth(i);
+      grid.appendChild(btn);
+    });
+    body.appendChild(grid);
+  } else {
+    const startYear=Math.floor(calYear/12)*12;
+    const grid=document.createElement('div');grid.className='cal-years-grid';
+    for(let y=startYear;y<startYear+12;y++){
+      const btn=document.createElement('div');btn.className='cal-year-btn';btn.textContent=y;
+      if(y===calYear)btn.classList.add('selected');
+      btn.onclick=()=>calSelectYear(y);
+      grid.appendChild(btn);
+    }
+    body.appendChild(grid);
+  }
+}
+
+function calSelectDay(ds){
+  if(calCtx==='log'){
+    if(logView==='day'){
+      logDate=ds;renderLog();closeCal();
+    } else {
+      // week mode: navigate to week containing this day
+      const d=new Date(ds+'T12:00:00');const sun=addDays(ds,-d.getDay());
+      const ts=weekSun(0);logWeekOff=Math.round((new Date(sun)-new Date(ts))/(7*86400000));
+      renderLog();closeCal();
+    }
+  } else {
+    // totals context
+    if(totalsPeriod==='day'){
+      const today=new Date();today.setHours(12,0,0,0);const sel=new Date(ds+'T12:00:00');
+      totalsOff=Math.round((sel-today)/86400000);
+    } else if(totalsPeriod==='week'){
+      // navigate totals week to contain this day
+      const d=new Date(ds+'T12:00:00');const sun=addDays(ds,-d.getDay());
+      const ts=weekSun(0);totalsOff=Math.round((new Date(sun)-new Date(ts))/(7*86400000));
+    } else if(totalsPeriod==='month'){
+      // navigate to that day's month
+      const d=new Date(ds+'T12:00:00');
+      const today=new Date();today.setDate(1);today.setHours(12,0,0,0);
+      const sel=new Date(d.getFullYear(),d.getMonth(),1,12,0,0);
+      totalsOff=Math.round((sel-today)/2592000000); // approx months
+      // More precise: count month difference
+      const tY=today.getFullYear(),tM=today.getMonth();
+      const sY=d.getFullYear(),sM=d.getMonth();
+      totalsOff=(sY-tY)*12+(sM-tM);
+    }
+    renderTotals();closeCal();
+  }
+}
+
+function calSelectMonth(m){
+  // Called from month-level picker
+  calMonth=m;
+  if(calCtx==='totals'&&totalsPeriod==='month'){
+    // Set totals to show calYear/calMonth
+    const today=new Date();const tY=today.getFullYear(),tM=today.getMonth();
+    totalsOff=(calYear-tY)*12+(calMonth-tM);
+    renderTotals();closeCal();
+  } else if(calCtx==='totals'&&totalsPeriod==='year'){
+    // year picker clicked a month — ignore, just drill into day
+    calViewLevel='day';renderCalBody();
+  } else {
+    // log context or day/week totals: drill into day view in calendar
+    calViewLevel='day';renderCalBody();
+  }
+}
+
+function calSelectYear(y){
+  calYear=y;
+  if(calCtx==='totals'&&totalsPeriod==='year'){
+    // Set totals year offset
+    const thisYear=new Date().getFullYear();
+    totalsOff=calYear-thisYear;
+    renderTotals();closeCal();
+  } else {
+    calViewLevel='month';renderCalBody();
+  }
+}
+
+// ══════════════════════════════════════════
+// TOTALS PAGE
+// ══════════════════════════════════════════
 function setPeriod(p){
   totalsPeriod=p;totalsOff=0;
-  ['day','week','year'].forEach(x=>document.getElementById('pb-'+x).classList.toggle('active',x===p));
-  renderTotals();
-}
-function setChart(c){
-  totalsChart=c;
-  ['timeline','bar','pie'].forEach(x=>document.getElementById('cb-'+x).classList.toggle('active',x===c));
+  ['day','week','month','year'].forEach(x=>document.getElementById('pb-'+x).classList.toggle('active',x===p));
   renderTotals();
 }
 function totalsNav(d){totalsOff+=d;renderTotals();}
@@ -525,17 +965,25 @@ function getTotalsInfo(){
   if(totalsPeriod==='day'){
     const b=new Date();b.setHours(12,0,0,0);b.setDate(b.getDate()+totalsOff);
     const ds=b.toISOString().slice(0,10);
-    return{label:fmtDate(ds),dates:[ds],subs:[DAYS[b.getDay()]],isYear:false};
+    return{label:fmtDate(ds),dates:[ds],subs:[DAYS[b.getDay()]],isYear:false,isMonth:false};
   }
   if(totalsPeriod==='week'){
     const sun=weekSun(totalsOff),sat=addDays(sun,6);
-    const f=s=>{const d=new Date(s+'T12:00:00');return MONTHS[d.getMonth()]+' '+d.getDate();};
+    const f=s=>{const d=new Date(s+'T12:00:00');return MONTHS_S[d.getMonth()]+' '+d.getDate();};
     const dates=Array.from({length:7},(_,i)=>addDays(sun,i));
-    return{label:f(sun)+' – '+f(sat),dates,subs:dates.map(d=>{const dd=new Date(d+'T12:00:00');return DAYS[dd.getDay()];}),isYear:false};
+    return{label:f(sun)+' – '+f(sat),dates,subs:dates.map(d=>{const dd=new Date(d+'T12:00:00');return DAYS[dd.getDay()];}),isYear:false,isMonth:false};
+  }
+  if(totalsPeriod==='month'){
+    const base=new Date();base.setDate(1);base.setHours(12,0,0,0);
+    base.setMonth(base.getMonth()+totalsOff);
+    const year=base.getFullYear(),month=base.getMonth();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const dates=Array.from({length:daysInMonth},(_,i)=>`${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`);
+    return{label:MONTHS_L[month]+' '+year,dates,subs:dates.map(d=>String(+d.slice(-2))),isYear:false,isMonth:true,year,month};
   }
   const year=new Date().getFullYear()+totalsOff;
   const dates=Array.from({length:12},(_,m)=>`${year}-${String(m+1).padStart(2,'0')}`);
-  return{label:String(year),dates,subs:MONTHS,isYear:true,year};
+  return{label:String(year),dates,subs:MONTHS_S,isYear:true,year};
 }
 
 function sumDay(ds){
@@ -544,14 +992,13 @@ function sumDay(ds){
     const s=startOf(ds,i),en=e.endTime===1.0?1:e.endTime;
     if(s==null||en==null||!e.activityId)return;
     let d=en-s;if(d<0)d+=1;if(t[e.activityId]!=null)t[e.activityId]+=d;
-  });
-  return t;
+  });return t;
 }
+function isOverflow(ds){return totalLoggedRaw(ds)>1.0001;}
 function sumMonth(ym){
   const t={};S.activities.forEach(a=>t[a.id]=0);
   Object.keys(S.logs).filter(ds=>ds.startsWith(ym)).forEach(ds=>{
-    const dt=sumDay(ds);S.activities.forEach(a=>t[a.id]+=(dt[a.id]||0));
-  });
+    const dt=sumDay(ds);S.activities.forEach(a=>t[a.id]+=(dt[a.id]||0));});
   return t;
 }
 
@@ -561,21 +1008,27 @@ function renderTotals(){
   const subData=info.dates.map((d,i)=>({label:info.subs[i],totals:info.isYear?sumMonth(d):sumDay(d)}));
   const agg={};S.activities.forEach(a=>agg[a.id]=0);
   subData.forEach(sd=>S.activities.forEach(a=>agg[a.id]+=(sd.totals[a.id]||0)));
-  const maxAgg=Math.max(...Object.values(agg),0.001);
   const content=document.getElementById('totalsContent');content.innerHTML='';
 
-  if(totalsChart==='pie')renderPie(content,agg,info.label);
-  else if(totalsChart==='bar')renderBar(content,agg,maxAgg);
-  else renderTimeline(content,subData,info);
+  // Timeline card
+  if(info.isMonth){
+    renderMonthGrid(content,info);
+  } else {
+    renderTimeline(content,subData,info);
+  }
 
-  // Summary card
+  // Breakdown: pie + summary
   const sc=document.createElement('div');sc.className='card';sc.innerHTML='<h2>Breakdown</h2>';
-  const sg=document.createElement('div');sg.className='summary-grid';
+  const total=Object.values(agg).reduce((a,b)=>a+b,0);
+  if(total>0){
+    // Pie inline
+    const pw=buildPie(agg,total);sc.appendChild(pw);
+  }
+  const sg=document.createElement('div');sg.className='summary-grid';sg.style.marginTop='14px';
   S.activities.filter(a=>agg[a.id]>0).forEach(a=>{
     const h=(agg[a.id]*24).toFixed(1);
-    const si=document.createElement('div');si.className='summary-item';
-    si.style.borderLeft=`3px solid ${a.color}`;
-    si.innerHTML=`<div class="summary-name"><div style="width:8px;height:8px;border-radius:50%;background:${a.color};"></div>${a.name}</div>
+    const si=document.createElement('div');si.className='summary-item';si.style.borderLeft=`3px solid ${a.color}`;
+    si.innerHTML=`<div class="summary-name"><div style="width:7px;height:7px;border-radius:50%;background:${a.color};"></div>${a.name}</div>
       <div class="summary-val" style="color:${a.color}">${h}h</div>`;
     sg.appendChild(si);
   });
@@ -583,82 +1036,14 @@ function renderTotals(){
   sc.appendChild(sg);content.appendChild(sc);
 }
 
-function renderTimeline(content,subData,info){
-  const card=document.createElement('div');card.className='card';
-  card.innerHTML=`<h2>${info.isYear?'Monthly':info.dates.length===1?'Day':'Daily'} Timeline</h2>`;
-  if(!info.isYear){
-    const ax=document.createElement('div');ax.className='time-axis';
-    for(let h=0;h<=24;h+=4){const t=document.createElement('div');t.className='time-tick';
-      t.textContent=h===0?'12a':h<12?h+'a':h===12?'12p':(h-12)+'p';ax.appendChild(t);}
-    card.appendChild(ax);
-  }
-  let anyData=false;
-  subData.forEach((sd,i)=>{
-    const ds=info.dates[i];
-    const row=document.createElement('div');row.className='tl-row';
-    const lbl=document.createElement('div');lbl.className='tl-lbl';lbl.textContent=sd.label;row.appendChild(lbl);
-    const bar=document.createElement('div');bar.className='tl-bar';
-    let logged=0;
-    if(info.isYear){
-      const total=Object.values(sd.totals).reduce((a,b)=>a+b,0);
-      if(total>0){anyData=true;
-        S.activities.filter(a=>sd.totals[a.id]>0).forEach(a=>{
-          const frac=sd.totals[a.id]/Math.max(total,0.0001);
-          const seg=document.createElement('div');seg.className='bar-seg';
-          seg.style.cssText=`width:${frac*100}%;background:${a.color};`;
-          seg.innerHTML=`<div class="seg-tip">${a.name}: ${(sd.totals[a.id]*24).toFixed(1)}h</div>`;
-          bar.appendChild(seg);});logged=total;}
-    } else {
-      dayEntries(ds).forEach((e,idx)=>{
-        const s=startOf(ds,idx),en=e.endTime===1.0?1:e.endTime;
-        if(s==null||en==null)return;let d=en-s;if(d<0)d+=1;if(d<=0)return;
-        logged+=d;anyData=true;const a=actById(e.activityId);
-        const seg=document.createElement('div');seg.className='bar-seg';
-        seg.style.cssText=`width:${d*100}%;background:${a?a.color:'#444'};`;
-        seg.innerHTML=`<div class="seg-tip">${a?a.name:'?'}: ${fmtDur(d)} (${decToTime(s>=1?0:s)}–${decToTime(en)})</div>`;
-        bar.appendChild(seg);});
-    }
-    row.appendChild(bar);
-    const tot=document.createElement('div');tot.className='tl-total';
-    tot.textContent=logged>0?(info.isYear?(logged*24).toFixed(1)+'h':fmtDur(logged)+' logged'):'';
-    row.appendChild(tot);card.appendChild(row);
-  });
-  if(!anyData)card.innerHTML+='<div class="no-data" style="margin-top:8px;">No entries logged for this period.</div>';
-  // Legend
-  const leg=document.createElement('div');leg.className='legend-strip';
-  S.activities.forEach(a=>{const li=document.createElement('div');li.className='legend-item';
-    li.innerHTML=`<div class="legend-dot" style="background:${a.color}"></div>${a.name}`;leg.appendChild(li);});
-  card.appendChild(leg);content.appendChild(card);
-}
-
-function renderBar(content,agg,maxAgg){
-  const card=document.createElement('div');card.className='card';card.innerHTML='<h2>Activity Totals</h2>';
-  const chart=document.createElement('div');chart.className='bar-chart';
-  const sorted=[...S.activities].filter(a=>agg[a.id]>0).sort((a,b)=>agg[b.id]-agg[a.id]);
-  sorted.forEach(a=>{
-    const h=(agg[a.id]*24).toFixed(1);const frac=agg[a.id]/maxAgg;
-    const row=document.createElement('div');row.className='bc-row';
-    row.innerHTML=`<div class="bc-lbl">${a.name}</div>
-      <div class="bc-bar"><div class="bc-fill" style="width:${frac*100}%;background:${a.color};"></div></div>
-      <div class="bc-val">${h}h</div>`;
-    chart.appendChild(row);});
-  if(!sorted.length)chart.innerHTML='<div class="no-data">No data for this period.</div>';
-  card.appendChild(chart);content.appendChild(card);
-}
-
-function renderPie(content,agg,label){
-  const card=document.createElement('div');card.className='card';
-  card.innerHTML=`<h2>Pie — ${label}</h2>`;
-  const total=Object.values(agg).reduce((a,b)=>a+b,0);
-  if(total===0){card.innerHTML+='<div class="no-data">No data for this period.</div>';content.appendChild(card);return;}
+function buildPie(agg,total){
   const wrap=document.createElement('div');wrap.className='pie-wrap';
-  const SIZE=210,CX=105,CY=105,R=85;
+  const SIZE=180,CX=90,CY=90,R=72;
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
   svg.setAttribute('width',SIZE);svg.setAttribute('height',SIZE);svg.setAttribute('viewBox',`0 0 ${SIZE} ${SIZE}`);
   svg.style.flexShrink='0';
   const bg=document.createElementNS('http://www.w3.org/2000/svg','circle');
-  bg.setAttribute('cx',CX);bg.setAttribute('cy',CY);bg.setAttribute('r',R);bg.setAttribute('fill','var(--surface2)');
-  svg.appendChild(bg);
+  bg.setAttribute('cx',CX);bg.setAttribute('cy',CY);bg.setAttribute('r',R);bg.setAttribute('fill','var(--surface2)');svg.appendChild(bg);
   let ang=-Math.PI/2;
   const segs=[...S.activities].filter(a=>agg[a.id]>0).sort((a,b)=>agg[b.id]-agg[a.id]);
   segs.forEach(a=>{
@@ -666,24 +1051,23 @@ function renderPie(content,agg,label){
     const x1=CX+R*Math.cos(ang),y1=CY+R*Math.sin(ang),x2=CX+R*Math.cos(end),y2=CY+R*Math.sin(end);
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',`M${CX},${CY} L${x1},${y1} A${R},${R},0,${da>Math.PI?1:0},1,${x2},${y2} Z`);
-    path.setAttribute('fill',a.color);path.setAttribute('opacity','0.9');path.style.cursor='default';path.style.transition='opacity 0.12s';
-    path.addEventListener('mouseenter',()=>path.setAttribute('opacity','0.7'));
+    path.setAttribute('fill',a.color);path.setAttribute('opacity','0.9');path.style.cursor='default';path.style.transition='opacity .12s';
+    path.addEventListener('mouseenter',()=>path.setAttribute('opacity','0.65'));
     path.addEventListener('mouseleave',()=>path.setAttribute('opacity','0.9'));
     const ti=document.createElementNS('http://www.w3.org/2000/svg','title');
     ti.textContent=`${a.name}: ${(frac*100).toFixed(1)}% (${(agg[a.id]*24).toFixed(1)}h)`;path.appendChild(ti);
     svg.appendChild(path);ang=end;
   });
   const hole=document.createElementNS('http://www.w3.org/2000/svg','circle');
-  hole.setAttribute('cx',CX);hole.setAttribute('cy',CY);hole.setAttribute('r',R*0.44);hole.setAttribute('fill','var(--surface)');
-  svg.appendChild(hole);
-  const txt1=document.createElementNS('http://www.w3.org/2000/svg','text');
-  txt1.setAttribute('x',CX);txt1.setAttribute('y',CY-4);txt1.setAttribute('text-anchor','middle');
-  txt1.setAttribute('fill','var(--text)');txt1.setAttribute('font-family','Syne,sans-serif');txt1.setAttribute('font-size','15');txt1.setAttribute('font-weight','700');
-  txt1.textContent=(total*24).toFixed(1)+'h';svg.appendChild(txt1);
-  const txt2=document.createElementNS('http://www.w3.org/2000/svg','text');
-  txt2.setAttribute('x',CX);txt2.setAttribute('y',CY+13);txt2.setAttribute('text-anchor','middle');
-  txt2.setAttribute('fill','var(--muted)');txt2.setAttribute('font-family','DM Mono,monospace');txt2.setAttribute('font-size','8');
-  txt2.textContent='logged';svg.appendChild(txt2);
+  hole.setAttribute('cx',CX);hole.setAttribute('cy',CY);hole.setAttribute('r',R*0.44);hole.setAttribute('fill','var(--surface)');svg.appendChild(hole);
+  const t1=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t1.setAttribute('x',CX);t1.setAttribute('y',CY-3);t1.setAttribute('text-anchor','middle');
+  t1.setAttribute('fill','var(--text)');t1.setAttribute('font-family','Syne,sans-serif');t1.setAttribute('font-size','13');t1.setAttribute('font-weight','700');
+  t1.textContent=(total*24).toFixed(1)+'h';svg.appendChild(t1);
+  const t2=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t2.setAttribute('x',CX);t2.setAttribute('y',CY+11);t2.setAttribute('text-anchor','middle');
+  t2.setAttribute('fill','var(--muted)');t2.setAttribute('font-family','DM Mono,monospace');t2.setAttribute('font-size','7');
+  t2.textContent='logged';svg.appendChild(t2);
   wrap.appendChild(svg);
   const legCol=document.createElement('div');legCol.className='pie-legend';
   segs.forEach(a=>{
@@ -691,10 +1075,164 @@ function renderPie(content,agg,label){
     li.innerHTML=`<div class="pie-dot" style="background:${a.color}"></div><span style="color:var(--text)">${a.name}</span>
       <span class="pie-legend-val">${(frac*100).toFixed(1)}% &nbsp;${(agg[a.id]*24).toFixed(1)}h</span>`;
     legCol.appendChild(li);});
-  wrap.appendChild(legCol);card.appendChild(wrap);content.appendChild(card);
+  wrap.appendChild(legCol);return wrap;
 }
 
-// ── INIT ───────────────────────────────────────────────
+// TIME AXIS: 12a 4a 8a 12p 4p 8p 12a (end is midnight again)
+function buildTimeAxis(){
+  const ax=document.createElement('div');ax.className='time-axis';
+  const labels=['12a','4a','8a','12p','4p','8p','12a'];
+  labels.forEach(l=>{const t=document.createElement('div');t.className='time-tick';t.textContent=l;ax.appendChild(t);});
+  return ax;
+}
+
+function renderTimeline(content,subData,info){
+  const card=document.createElement('div');card.className='card';
+  const isPeriodYear=info.isYear;
+  card.innerHTML=`<h2>${isPeriodYear?'Monthly':'Daily'} Timeline</h2>`;
+  if(!isPeriodYear)card.appendChild(buildTimeAxis());
+  let anyData=false;
+  subData.forEach((sd,i)=>{
+    const ds=info.dates[i];
+    const row=document.createElement('div');row.className='tl-row';
+    const lbl=document.createElement('div');lbl.className='tl-lbl';lbl.textContent=sd.label;row.appendChild(lbl);
+
+    if(isPeriodYear){
+      // Year view: pack all days of the month as mini side-by-side horizontal timeline strips
+      const ym=ds;
+      const [yr,mo]=ym.split('-').map(Number);
+      const daysInMon=new Date(yr,mo,0).getDate();
+      const monthBar=document.createElement('div');
+      monthBar.style.cssText='flex:1;height:26px;background:var(--surface2);border-radius:4px;border:1px solid var(--border);display:flex;overflow:hidden;position:relative;';
+      let monthHasData=false;
+      let monthOverflow=false;
+      for(let d=1;d<=daysInMon;d++){
+        const dayDs=`${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        if(isOverflow(dayDs))monthOverflow=true;
+        const dayEl=document.createElement('div');
+        dayEl.style.cssText=`flex:1;height:100%;position:relative;border-right:1px solid rgba(255,255,255,0.04);overflow:hidden;`;
+        dayEntries(dayDs).forEach((e,eidx)=>{
+          const s=startOf(dayDs,eidx),en=e.endTime===1.0?1:e.endTime;
+          if(s==null||en==null)return;let dur=en-s;if(dur<0)dur+=1;if(dur<=0)return;
+          monthHasData=true;anyData=true;
+          const a=actById(e.activityId);
+          const seg=document.createElement('div');
+          seg.style.cssText=`position:absolute;left:${s*100}%;width:${dur*100}%;height:100%;background:${a?a.color:'#444'};`;
+          seg.title=`${a?a.name:'?'} ${decToAMPM(s)}–${decToAMPM(en)}`;
+          dayEl.appendChild(seg);
+        });
+        monthBar.appendChild(dayEl);
+      }
+      if(!monthHasData)monthBar.style.opacity='0.3';
+      if(monthOverflow)monthBar.style.outline='1px solid var(--accent3)';
+      row.appendChild(monthBar);
+      const logged=Object.values(sd.totals).reduce((a,b)=>a+b,0);
+      const tot=document.createElement('div');tot.className='tl-total';
+      if(monthOverflow)tot.classList.add('over');
+      tot.textContent=logged>0?(logged*24).toFixed(1)+'h':'';
+      if(monthOverflow)lbl.classList.add('over');
+      row.appendChild(tot);
+    } else {
+      // Day/week: time-positioned segments
+      const bar=document.createElement('div');bar.className='tl-bar';bar.style.position='relative';
+      let logged=0;
+      const over=isOverflow(ds);
+      if(over){bar.style.outline='1px solid var(--accent3)';lbl.classList.add('over');}
+      dayEntries(ds).forEach((e,idx)=>{
+        const s=startOf(ds,idx),en=e.endTime===1.0?1:e.endTime;
+        if(s==null||en==null)return;let d=en-s;if(d<0)d+=1;if(d<=0)return;
+        logged+=d;anyData=true;const a=actById(e.activityId);
+        const seg=document.createElement('div');seg.className='bar-seg';
+        seg.style.cssText=`position:absolute;left:${s*100}%;width:${d*100}%;background:${a?a.color:'#444'};height:100%;`;
+        seg.innerHTML=`<div class="seg-tip">${a?a.name:'?'}: ${fmtDur(d)} (${decToAMPM(s>=1?0:s)}–${decToAMPM(en)})</div>`;
+        bar.appendChild(seg);
+      });
+      row.appendChild(bar);
+      const tot=document.createElement('div');tot.className='tl-total';
+      if(over)tot.classList.add('over');
+      tot.textContent=logged>0?fmtDur(logged)+' logged':'';
+      row.appendChild(tot);
+    }
+    card.appendChild(row);
+  });
+  if(!anyData)card.innerHTML+='<div class="no-data" style="margin-top:8px;">No entries logged for this period.</div>';
+  const leg=document.createElement('div');leg.className='legend-strip';
+  S.activities.forEach(a=>{const li=document.createElement('div');li.className='legend-item';
+    li.innerHTML=`<div class="legend-dot" style="background:${a.color}"></div>${a.name}`;leg.appendChild(li);});
+  card.appendChild(leg);content.appendChild(card);
+}
+
+function renderMonthGrid(content,info){
+  const card=document.createElement('div');card.className='card';
+  card.innerHTML=`<h2>${info.label}</h2>`;
+  const {year,month}=info;
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const todayS=todayStr();
+  // Day-of-week headers
+  const hdrRow=document.createElement('div');
+  hdrRow.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:1px;margin-bottom:1px;';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>{
+    const h=document.createElement('div');
+    h.style.cssText='text-align:center;font-size:0.6rem;color:var(--muted);padding:3px 0;font-family:Syne,sans-serif;font-weight:700;';
+    h.textContent=d;hdrRow.appendChild(h);
+  });
+  card.appendChild(hdrRow);
+  const grid=document.createElement('div');grid.className='month-grid';
+  // Blank cells before month starts
+  for(let i=0;i<firstDay;i++){
+    const cell=document.createElement('div');cell.className='month-cell other-m';grid.appendChild(cell);
+  }
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const cell=document.createElement('div');cell.className='month-cell';
+    if(ds===todayS)cell.classList.add('today-cell');
+    cell.style.cursor='pointer';
+    cell.onclick=()=>{logDate=ds;switchTab('log');setLogView('day');};
+    // Date label top-left
+    const dateLabel=document.createElement('div');dateLabel.className='month-cell-date';dateLabel.textContent=d;cell.appendChild(dateLabel);
+    // Mini timeline bar: horizontally positioned segments, full width of cell
+    const miniBar=document.createElement('div');
+    miniBar.style.cssText='width:100%;height:14px;background:var(--surface2);border-radius:2px;position:relative;overflow:hidden;margin-top:3px;';
+    const entries=dayEntries(ds);
+    let hasAny=false;
+    entries.forEach((e,eidx)=>{
+      const s=startOf(ds,eidx),en=e.endTime===1.0?1:e.endTime;
+      if(s==null||en==null)return;
+      let dur=en-s;if(dur<0)dur+=1;if(dur<=0)return;
+      hasAny=true;
+      const a=actById(e.activityId);
+      const seg=document.createElement('div');
+      seg.style.cssText=`position:absolute;left:${s*100}%;width:${dur*100}%;height:100%;background:${a?a.color:'#555'};`;
+      seg.title=`${a?a.name:'?'} ${decToAMPM(s)}–${decToAMPM(en)}`;
+      miniBar.appendChild(seg);
+    });
+    if(!hasAny)miniBar.style.opacity='0.3';
+    if(isOverflow(ds)){
+      miniBar.style.outline='1px solid var(--accent3)';
+      dateLabel.classList.add('over');
+    }
+    cell.appendChild(miniBar);
+    // GitHub-style heatmap dot
+    const frac=loggedFraction(ds);
+    if(frac>0){
+      const dot=document.createElement('div');dot.className='month-dot';
+      dot.style.background=frac>0.5?'var(--accent)':'#3a6b10';cell.appendChild(dot);
+    }
+    grid.appendChild(cell);
+  }
+  // Trailing blanks
+  const totalFilled=firstDay+daysInMonth;
+  const trailing=(7-totalFilled%7)%7;
+  for(let i=0;i<trailing;i++){
+    const cell=document.createElement('div');cell.className='month-cell other-m';grid.appendChild(cell);
+  }
+  card.appendChild(grid);content.appendChild(card);
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
 load();renderActivities();renderLog();
 </script>
 </body>
